@@ -1,0 +1,16 @@
+services:
+  gitactionsview:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - GITHUB_REPOS=${GITHUB_REPOS}
+      - GITHUB_ACCESS_TOKEN=${GITHUB_ACCESS_TOKEN:-}
+      - GITHUB_OAUTH2_CLIENT_ID=${GITHUB_OAUTH2_CLIENT_ID:-}
+      - GITHUB_OAUTH2_CLIENT_SECRET=${GITHUB_OAUTH2_CLIENT_SECRET:-}
+      - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
+      - DISCOVERY_POLL_SECONDS=${DISCOVERY_POLL_SECONDS:-60}
+      - ACTIVE_POLL_SECONDS=${ACTIVE_POLL_SECONDS:-10}
+      - DB_PATH=/app/data/gitactionsview.db
+    volumes:
+      - ./data:/app/data
