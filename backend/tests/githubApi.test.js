@@ -59,11 +59,11 @@ describe('githubApi', () => {
     expect(result.status).toBe('completed');
   });
 
-  test('listRunJobs calls correct endpoint with per_page 100', async () => {
+  test('listRunJobs calls correct endpoint with filter=latest', async () => {
     mockGet.mockResolvedValue({ data: { jobs: [{ id: 1, name: 'build' }] } });
     const result = await githubApi.listRunJobs('org', 'repo', 123, 'token');
     expect(mockGet).toHaveBeenCalledWith('/repos/org/repo/actions/runs/123/jobs', {
-      params: { per_page: 100 },
+      params: { per_page: 100, filter: 'latest', page: 1 },
     });
     expect(result).toEqual([{ id: 1, name: 'build' }]);
   });
@@ -72,6 +72,24 @@ describe('githubApi', () => {
     mockGet.mockResolvedValue({ data: {} });
     const result = await githubApi.listRunJobs('org', 'repo', 123, 'token');
     expect(result).toEqual([]);
+  });
+
+  test('listRunJobs paginates when more than 100 jobs', async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({ id: i + 1, name: `job-${i + 1}` }));
+    const page2 = [{ id: 101, name: 'job-101' }];
+    mockGet
+      .mockResolvedValueOnce({ data: { jobs: page1 } })
+      .mockResolvedValueOnce({ data: { jobs: page2 } });
+
+    const result = await githubApi.listRunJobs('org', 'repo', 123, 'token');
+    expect(result).toHaveLength(101);
+    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(mockGet).toHaveBeenCalledWith('/repos/org/repo/actions/runs/123/jobs', {
+      params: { per_page: 100, filter: 'latest', page: 1 },
+    });
+    expect(mockGet).toHaveBeenCalledWith('/repos/org/repo/actions/runs/123/jobs', {
+      params: { per_page: 100, filter: 'latest', page: 2 },
+    });
   });
 
   test('creates client with Authorization header when token provided', async () => {

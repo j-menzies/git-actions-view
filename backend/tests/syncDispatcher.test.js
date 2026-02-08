@@ -112,6 +112,37 @@ describe('syncDispatcher', () => {
     dispatcher.stop();
   });
 
+  test('pollActiveRuns removes stale runs after 30 minutes', async () => {
+    const reposService = require('../src/services/reposService');
+    reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
+    const syncService = require('../src/services/syncService');
+    // Return one active run from discovery
+    syncService.syncRepoRuns.mockResolvedValue([{ id: 100, owner: 'org', repo: 'repo' }]);
+    // syncActiveRun always returns false (never completes)
+    syncService.syncActiveRun.mockResolvedValue(false);
+
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const dispatcher = require('../src/services/syncDispatcher');
+    dispatcher.start();
+
+    // Wait for discovery to complete
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Advance time past the 30 minute timeout
+    jest.advanceTimersByTime(31 * 60 * 1000);
+
+    // The active poller should have run and removed the stale run
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('timed out after 30 minutes'));
+    consoleSpy.mockRestore();
+    warnSpy.mockRestore();
+    dispatcher.stop();
+  });
+
   test('syncSingleRepo() calls syncRepoRuns for a specific repo', async () => {
     const reposService = require('../src/services/reposService');
     reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);

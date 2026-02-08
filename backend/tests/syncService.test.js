@@ -218,6 +218,44 @@ describe('syncService', () => {
     expect(isCompleted).toBe(true);
   });
 
+  test('syncActiveRun cleans up stale jobs from previous attempts', async () => {
+    const db = getDb();
+
+    syncService.upsertWorkflow({ id: 1, name: 'CI' }, 'org', 'repo');
+    syncService.upsertRun({
+      id: 100, workflow_id: 1, run_number: 1, status: 'in_progress',
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:01:00Z',
+    }, 'org', 'repo', 'CI');
+
+    // Insert a stale job from a previous attempt
+    syncService.upsertJob({
+      id: 300, name: 'stale-job', status: 'completed', conclusion: 'failure',
+      started_at: '2026-01-01T00:00:05Z', completed_at: '2026-01-01T00:02:00Z',
+    }, 100);
+
+    // Now the run completes with different jobs (latest attempt)
+    githubApi.getWorkflowRun.mockResolvedValue({
+      id: 100, workflow_id: 1, run_number: 1, status: 'completed', conclusion: 'success',
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:05:00Z',
+    });
+    githubApi.listRunJobs.mockResolvedValue([
+      { id: 400, name: 'build', status: 'completed', conclusion: 'success' },
+      { id: 401, name: 'test', status: 'completed', conclusion: 'success' },
+    ]);
+
+    const isCompleted = await syncService.syncActiveRun('org', 'repo', 100, 'token');
+    expect(isCompleted).toBe(true);
+
+    // Stale job should be deleted
+    const staleJob = db.prepare('SELECT * FROM workflow_jobs WHERE id = 300').get();
+    expect(staleJob).toBeUndefined();
+
+    // Latest jobs should exist
+    const allJobs = db.prepare('SELECT * FROM workflow_jobs WHERE run_id = 100').all();
+    expect(allJobs).toHaveLength(2);
+    expect(allJobs.map(j => j.id)).toEqual(expect.arrayContaining([400, 401]));
+  });
+
   test('syncActiveRun returns false when still running', async () => {
     syncService.upsertWorkflow({ id: 1, name: 'CI' }, 'org', 'repo');
     syncService.upsertRun({

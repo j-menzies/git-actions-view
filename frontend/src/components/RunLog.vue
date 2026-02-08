@@ -1,7 +1,5 @@
 <template>
   <v-container fluid class="pa-4" style="max-width: 1200px">
-    <RunLogFilters :repositories="repositories" @change="onFilterChange" />
-
     <div v-if="initialLoading" class="text-center pa-8">
       <v-progress-circular indeterminate size="48" />
       <p class="text-body-2 text-medium-emphasis mt-4">Loading runs...</p>
@@ -35,26 +33,34 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { fetchRuns, fetchConfig } from '@/services/api'
 import RunCard from './RunCard.vue'
-import RunLogFilters from './RunLogFilters.vue'
+import { useFilters } from '@/composables/useFilters'
+
+const { state: filterState, setRepositories } = useFilters()
 
 const runs = ref([])
-const repositories = ref([])
 const initialLoading = ref(true)
 const loadingMore = ref(false)
 const hasMore = ref(true)
 const nextCursor = ref(null)
 const sentinel = ref(null)
-const filters = ref({})
 let observer = null
 let refreshTimer = null
+
+function currentFilterParams() {
+  return {
+    repo: filterState.repo || undefined,
+    status: filterState.status || undefined,
+    branch: filterState.branch || undefined,
+  }
+}
 
 async function loadConfig() {
   try {
     const config = await fetchConfig()
-    repositories.value = config.repositories || []
+    setRepositories(config.repositories || [])
   } catch {
     // ignore
   }
@@ -71,7 +77,7 @@ async function loadRuns(append = false) {
   try {
     const params = {
       limit: 50,
-      ...filters.value,
+      ...currentFilterParams(),
     }
     if (append && nextCursor.value) {
       params.before = nextCursor.value
@@ -96,7 +102,7 @@ async function loadRuns(append = false) {
 
 async function refreshTop() {
   try {
-    const params = { limit: 50, ...filters.value }
+    const params = { limit: 50, ...currentFilterParams() }
     const data = await fetchRuns(params)
     // Merge new runs at top
     const existingIds = new Set(runs.value.map(r => r.id))
@@ -112,14 +118,14 @@ async function refreshTop() {
   }
 }
 
-function onFilterChange(newFilters) {
-  filters.value = newFilters
+// Watch for filter changes from AppBar
+watch(() => filterState.revision, () => {
   runs.value = []
   nextCursor.value = null
   hasMore.value = true
   initialLoading.value = true
   loadRuns()
-}
+})
 
 function setupIntersectionObserver() {
   if (!sentinel.value) return

@@ -145,10 +145,19 @@ async function syncActiveRun(owner, repo, runId, accessToken) {
 
     upsertRun(run, owner, repo, workflowName);
 
-    // Also refresh jobs
+    // Also refresh jobs (filter=latest ensures only current attempt)
     const jobs = await githubApi.listRunJobs(owner, repo, runId, accessToken);
     for (const job of jobs) {
       upsertJob(job, runId);
+    }
+
+    // If run is completed, clean up stale jobs from previous attempts
+    if (run.status === 'completed' && jobs.length > 0) {
+      const latestJobIds = jobs.map(j => j.id);
+      const placeholders = latestJobIds.map(() => '?').join(',');
+      db.prepare(
+        `DELETE FROM workflow_jobs WHERE run_id = ? AND id NOT IN (${placeholders})`
+      ).run(runId, ...latestJobIds);
     }
 
     // Only mark as done if run is completed AND all jobs have resolved

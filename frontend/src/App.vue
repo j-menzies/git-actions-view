@@ -11,7 +11,10 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import AppBar from './components/AppBar.vue'
+import { provideFilters } from './composables/useFilters'
 
 const route = useRoute()
 const showAppBar = computed(() => route.name !== 'Login')
+
+provideFilters()
 </script>

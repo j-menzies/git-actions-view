@@ -34,10 +34,21 @@ async function getWorkflowRun(owner, repo, runId, accessToken) {
 
 async function listRunJobs(owner, repo, runId, accessToken) {
   const client = createClient(accessToken);
-  const res = await client.get(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs`, {
-    params: { per_page: 100 },
-  });
-  return res.data.jobs || [];
+  const jobs = [];
+  let page = 1;
+
+  while (true) {
+    const res = await client.get(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs`, {
+      params: { per_page: 100, filter: 'latest', page },
+    });
+    const data = res.data.jobs || [];
+    if (data.length === 0) break;
+    jobs.push(...data);
+    if (data.length < 100) break;
+    page++;
+  }
+
+  return jobs;
 }
 
 async function listUserRepos(accessToken) {

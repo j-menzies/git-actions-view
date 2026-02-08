@@ -1,48 +1,74 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
+import { defineComponent, h } from 'vue'
 import { mount } from '@vue/test-utils'
-import { createTestVuetify } from './setup'
-import RunLogFilters from '@/components/RunLogFilters.vue'
+import { provideFilters, useFilters } from '@/composables/useFilters'
 
-function mountFilters(props = {}) {
-  return mount(RunLogFilters, {
-    props: {
-      repositories: ['org1/repo-a', 'org2/repo-b'],
-      ...props,
-    },
-    global: {
-      plugins: [createTestVuetify()],
+// Helper: mount a component tree that provides + consumes the filter composable
+function createFilterHarness() {
+  let consumed = null
+
+  const Child = defineComponent({
+    setup() {
+      consumed = useFilters()
+      return () => h('div')
     },
   })
+
+  const Parent = defineComponent({
+    setup() {
+      const provided = provideFilters()
+      return { provided }
+    },
+    render() {
+      return h(Child)
+    },
+  })
+
+  const wrapper = mount(Parent)
+  return { wrapper, provided: wrapper.vm.provided, consumed }
 }
 
-describe('RunLogFilters', () => {
-  it('renders repository select', () => {
-    const wrapper = mountFilters()
-    expect(wrapper.find('.v-select').exists()).toBe(true)
+describe('useFilters composable', () => {
+  it('provides initial empty state', () => {
+    const { consumed } = createFilterHarness()
+    expect(consumed.state.repo).toBeNull()
+    expect(consumed.state.status).toBeUndefined()
+    expect(consumed.state.branch).toBe('')
+    expect(consumed.state.repositories).toEqual([])
+    expect(consumed.state.revision).toBe(0)
   })
 
-  it('renders status chips', () => {
-    const wrapper = mountFilters()
-    expect(wrapper.text()).toContain('Success')
-    expect(wrapper.text()).toContain('Failure')
-    expect(wrapper.text()).toContain('In Progress')
-    expect(wrapper.text()).toContain('Cancelled')
+  it('setFilter updates state and bumps revision', () => {
+    const { consumed } = createFilterHarness()
+    consumed.setFilter({ repo: 'org/repo', status: 'success', branch: 'main' })
+    expect(consumed.state.repo).toBe('org/repo')
+    expect(consumed.state.status).toBe('success')
+    expect(consumed.state.branch).toBe('main')
+    expect(consumed.state.revision).toBe(1)
   })
 
-  it('renders branch text field', () => {
-    const wrapper = mountFilters()
-    const textFields = wrapper.findAll('.v-text-field')
-    expect(textFields.length).toBeGreaterThanOrEqual(1)
+  it('setFilter handles partial updates', () => {
+    const { consumed } = createFilterHarness()
+    consumed.setFilter({ repo: 'org/repo' })
+    expect(consumed.state.repo).toBe('org/repo')
+    expect(consumed.state.status).toBeUndefined()
+    expect(consumed.state.branch).toBe('')
   })
 
-  it('has 4 status options', () => {
-    const wrapper = mountFilters()
-    const chips = wrapper.findAll('.v-chip-group .v-chip')
-    expect(chips.length).toBe(4)
+  it('setRepositories updates repositories list', () => {
+    const { consumed } = createFilterHarness()
+    consumed.setRepositories(['org1/repo-a', 'org2/repo-b'])
+    expect(consumed.state.repositories).toEqual(['org1/repo-a', 'org2/repo-b'])
   })
 
-  it('renders with empty repositories', () => {
-    const wrapper = mountFilters({ repositories: [] })
-    expect(wrapper.find('.v-select').exists()).toBe(true)
+  it('clearing filters resets state', () => {
+    const { consumed } = createFilterHarness()
+    consumed.setFilter({ repo: 'org/repo', status: 'failure', branch: 'dev' })
+    expect(consumed.state.revision).toBe(1)
+    consumed.setFilter({})
+    expect(consumed.state.repo).toBeNull()
+    expect(consumed.state.status).toBeUndefined()
+    expect(consumed.state.branch).toBe('')
+    expect(consumed.state.revision).toBe(2)
   })
 })

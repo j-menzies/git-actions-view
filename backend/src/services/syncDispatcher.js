@@ -2,11 +2,12 @@ const config = require('../config');
 const { syncRepoRuns, syncActiveRun } = require('./syncService');
 const reposService = require('./reposService');
 
-// Set of active (in-flight) runs: { id, owner, repo }
+// Set of active (in-flight) runs: { id, owner, repo, trackedSince }
 const activeRuns = new Map();
 let discoveryTimer = null;
 let activeTimer = null;
 let isSyncing = false;
+const MAX_ACTIVE_TRACKING_MS = 30 * 60 * 1000; // 30 minutes
 
 async function runDiscovery() {
   if (isSyncing) return;
@@ -24,7 +25,7 @@ async function runDiscovery() {
       for (const run of newActive) {
         const key = `${run.owner}/${run.repo}/${run.id}`;
         if (!activeRuns.has(key)) {
-          activeRuns.set(key, run);
+          activeRuns.set(key, { ...run, trackedSince: Date.now() });
         }
       }
     }
@@ -46,7 +47,11 @@ async function pollActiveRuns() {
   for (const [key, run] of entries) {
     try {
       const isCompleted = await syncActiveRun(run.owner, run.repo, run.id, token);
-      if (isCompleted) {
+      const isStale = Date.now() - run.trackedSince > MAX_ACTIVE_TRACKING_MS;
+      if (isCompleted || isStale) {
+        if (isStale && !isCompleted) {
+          console.warn(`Active run ${key} timed out after 30 minutes, removing from tracking.`);
+        }
         activeRuns.delete(key);
       }
     } catch (err) {
@@ -107,7 +112,7 @@ async function syncSingleRepo(owner, name) {
     for (const run of newActive) {
       const key = `${run.owner}/${run.repo}/${run.id}`;
       if (!activeRuns.has(key)) {
-        activeRuns.set(key, run);
+        activeRuns.set(key, { ...run, trackedSince: Date.now() });
       }
     }
     console.log(`Single repo sync complete for ${owner}/${name}`);

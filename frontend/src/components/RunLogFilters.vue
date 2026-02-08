@@ -1,6 +1,6 @@
 <template>
   <v-card variant="flat" class="mb-4 pa-3">
-    <div class="d-flex flex-wrap align-center ga-3">
+    <div class="d-flex flex-wrap align-center justify-end ga-3">
       <v-select
         v-model="filters.repo"
         :items="repoOptions"
