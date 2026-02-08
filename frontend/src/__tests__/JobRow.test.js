@@ -95,4 +95,32 @@ describe('JobRow', () => {
     expect(wrapper.text()).not.toContain('min')
     expect(wrapper.text()).not.toContain('self-hosted')
   })
+
+  it('has tooltip on duration', () => {
+    const wrapper = mountJobRow()
+    const tooltips = wrapper.findAllComponents({ name: 'VTooltip' })
+    const texts = tooltips.map(t => t.props('text'))
+    expect(texts).toContain('Elapsed time')
+  })
+
+  it('has tooltip on billable minutes', () => {
+    const wrapper = mountJobRow({ job: { billableMinutes: 5, runnerOs: 'linux' } })
+    const tooltips = wrapper.findAllComponents({ name: 'VTooltip' })
+    const texts = tooltips.map(t => t.props('text'))
+    expect(texts).toContain('Billable minutes')
+  })
+
+  it('has tooltip on runner name', () => {
+    const wrapper = mountJobRow()
+    const tooltips = wrapper.findAllComponents({ name: 'VTooltip' })
+    const texts = tooltips.map(t => t.props('text'))
+    expect(texts).toContain('Runner')
+  })
+
+  it('has tooltip on GitHub link', () => {
+    const wrapper = mountJobRow()
+    const tooltips = wrapper.findAllComponents({ name: 'VTooltip' })
+    const texts = tooltips.map(t => t.props('text'))
+    expect(texts).toContain('View on GitHub')
+  })
 })

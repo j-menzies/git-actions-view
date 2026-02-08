@@ -78,15 +78,23 @@
           </v-avatar>
         </template>
 
-        <span v-if="run.duration" class="text-body-2 text-medium-emphasis">
-          <v-icon size="small">mdi-timer-outline</v-icon>
-          {{ run.duration }}
-        </span>
+        <v-tooltip text="Elapsed time" location="top">
+          <template #activator="{ props: tip }">
+            <span v-if="run.duration" v-bind="tip" class="text-body-2 text-medium-emphasis">
+              <v-icon size="small">mdi-timer-outline</v-icon>
+              {{ run.duration }}
+            </span>
+          </template>
+        </v-tooltip>
 
-        <span v-if="run.totalBillableMinutes > 0" class="text-body-2 text-medium-emphasis">
-          <v-icon size="small">mdi-cash-multiple</v-icon>
-          {{ run.totalBillableMinutes }} min
-        </span>
+        <v-tooltip text="Total billable minutes" location="top">
+          <template #activator="{ props: tip }">
+            <span v-if="run.totalBillableMinutes > 0" v-bind="tip" class="text-body-2 text-medium-emphasis">
+              <v-icon size="small">mdi-cash-multiple</v-icon>
+              {{ run.totalBillableMinutes }} min
+            </span>
+          </template>
+        </v-tooltip>
 
         <span class="text-body-2 text-medium-emphasis">
           {{ relativeTime }}
@@ -96,16 +104,21 @@
           {{ jobBadge }}
         </span>
 
-        <v-btn
-          :href="run.htmlUrl"
-          target="_blank"
-          icon
-          size="x-small"
-          variant="text"
-          @click.stop
-        >
-          <v-icon size="small">mdi-open-in-new</v-icon>
-        </v-btn>
+        <v-tooltip text="View on GitHub" location="top">
+          <template #activator="{ props: tip }">
+            <v-btn
+              v-bind="tip"
+              :href="run.htmlUrl"
+              target="_blank"
+              icon
+              size="x-small"
+              variant="text"
+              @click.stop
+            >
+              <v-icon size="small">mdi-open-in-new</v-icon>
+            </v-btn>
+          </template>
+        </v-tooltip>
 
         <v-icon>{{ expanded ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
       </div>

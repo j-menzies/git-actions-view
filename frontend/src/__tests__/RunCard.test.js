@@ -196,6 +196,29 @@ describe('RunCard', () => {
     })
   })
 
+  describe('tooltips', () => {
+    it('has tooltip on elapsed time', () => {
+      const wrapper = mountCard()
+      const tooltips = wrapper.findAllComponents({ name: 'VTooltip' })
+      const texts = tooltips.map(t => t.props('text'))
+      expect(texts).toContain('Elapsed time')
+    })
+
+    it('has tooltip on total billable minutes', () => {
+      const wrapper = mountCard({ totalBillableMinutes: 15 })
+      const tooltips = wrapper.findAllComponents({ name: 'VTooltip' })
+      const texts = tooltips.map(t => t.props('text'))
+      expect(texts).toContain('Total billable minutes')
+    })
+
+    it('has tooltip on GitHub link', () => {
+      const wrapper = mountCard()
+      const tooltips = wrapper.findAllComponents({ name: 'VTooltip' })
+      const texts = tooltips.map(t => t.props('text'))
+      expect(texts).toContain('View on GitHub')
+    })
+  })
+
   describe('actor linking', () => {
     it('links actor when actorType is User', () => {
       const wrapper = mountCard({ actorType: 'User' })
