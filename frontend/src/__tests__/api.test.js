@@ -9,7 +9,7 @@ const originalLocation = window.location
 delete window.location
 window.location = { hash: '' }
 
-import { fetchConfig, fetchMe, fetchRuns, fetchJobs, loginBasic, logout } from '@/services/api'
+import { fetchConfig, fetchMe, fetchRuns, fetchJobs, loginBasic, logout, fetchGithubRepos } from '@/services/api'
 
 describe('api service', () => {
   beforeEach(() => {
@@ -188,6 +188,21 @@ describe('api service', () => {
         method: 'POST',
         credentials: 'include',
       })
+    })
+  })
+
+  describe('fetchGithubRepos', () => {
+    it('fetches /api/v1/github/repos with credentials', async () => {
+      const mockData = { repos: [{ owner: 'org', name: 'repo', fullName: 'org/repo' }] }
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(mockData),
+      })
+
+      const result = await fetchGithubRepos()
+      expect(result).toEqual(mockData)
+      expect(mockFetch).toHaveBeenCalledWith('/api/v1/github/repos', { credentials: 'include' })
     })
   })
 })

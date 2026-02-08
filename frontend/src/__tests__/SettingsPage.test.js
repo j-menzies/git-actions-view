@@ -12,6 +12,7 @@ const mockAddRepo = vi.fn()
 const mockUpdateRepo = vi.fn()
 const mockDeleteRepo = vi.fn()
 const mockRebuildDatabase = vi.fn()
+const mockFetchGithubRepos = vi.fn()
 
 vi.mock('@/services/api', () => ({
   fetchSettings: (...args) => mockFetchSettings(...args),
@@ -21,6 +22,7 @@ vi.mock('@/services/api', () => ({
   updateRepo: (...args) => mockUpdateRepo(...args),
   deleteRepo: (...args) => mockDeleteRepo(...args),
   rebuildDatabase: (...args) => mockRebuildDatabase(...args),
+  fetchGithubRepos: (...args) => mockFetchGithubRepos(...args),
 }))
 
 function createTestRouter() {
@@ -56,9 +58,16 @@ describe('SettingsPage', () => {
     mockUpdateRepo.mockReset()
     mockDeleteRepo.mockReset()
     mockRebuildDatabase.mockReset()
+    mockFetchGithubRepos.mockReset()
 
     mockFetchSettings.mockResolvedValue({ discoveryPollSeconds: 60, activePollSeconds: 10 })
     mockFetchRepos.mockResolvedValue({ repos: [] })
+    mockFetchGithubRepos.mockResolvedValue({
+      repos: [
+        { owner: 'test-org', name: 'my-repo', fullName: 'test-org/my-repo' },
+        { owner: 'test-org', name: 'other-repo', fullName: 'test-org/other-repo' },
+      ],
+    })
   })
 
   it('renders the settings heading', async () => {
@@ -137,7 +146,45 @@ describe('SettingsPage', () => {
     expect(rebuildBtn).toBeDefined()
     await rebuildBtn.trigger('click')
     await flushPromises()
-    // Dialog should be visible
-    expect(wrapper.text()).toContain('Rebuild Database Cache?')
+    // VDialog teleports its content to document.body, so check there
+    expect(document.body.textContent).toContain('Rebuild Database Cache?')
+  })
+
+  it('shows autocomplete when GitHub repos are available', async () => {
+    const wrapper = mountSettings()
+    await flushPromises()
+    const autocomplete = wrapper.findComponent({ name: 'v-autocomplete' })
+    expect(autocomplete.exists()).toBe(true)
+    expect(mockFetchGithubRepos).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to manual input when GitHub repos fetch fails', async () => {
+    mockFetchGithubRepos.mockRejectedValue(new Error('No token'))
+    const wrapper = mountSettings()
+    await flushPromises()
+    const autocomplete = wrapper.findComponent({ name: 'v-autocomplete' })
+    expect(autocomplete.exists()).toBe(false)
+    // Manual input fields should be visible
+    expect(wrapper.text()).toContain('Owner')
+  })
+
+  it('filters out already configured repos from autocomplete', async () => {
+    mockFetchRepos.mockResolvedValue({
+      repos: [{ id: 1, owner: 'test-org', name: 'my-repo', hidden: 0 }],
+    })
+    mockFetchGithubRepos.mockResolvedValue({
+      repos: [
+        { owner: 'test-org', name: 'my-repo', fullName: 'test-org/my-repo' },
+        { owner: 'test-org', name: 'other-repo', fullName: 'test-org/other-repo' },
+      ],
+    })
+    const wrapper = mountSettings()
+    await flushPromises()
+    const autocomplete = wrapper.findComponent({ name: 'v-autocomplete' })
+    expect(autocomplete.exists()).toBe(true)
+    // The autocomplete should only show 'other-repo' (my-repo is already configured)
+    const items = autocomplete.props('items')
+    expect(items).toHaveLength(1)
+    expect(items[0].fullName).toBe('test-org/other-repo')
   })
 })

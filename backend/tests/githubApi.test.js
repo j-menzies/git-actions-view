@@ -113,4 +113,48 @@ describe('githubApi', () => {
       })
     );
   });
+
+  test('listUserRepos fetches all pages of user repos', async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      owner: { login: 'user' },
+      name: `repo-${i}`,
+      full_name: `user/repo-${i}`,
+    }));
+    const page2 = Array.from({ length: 50 }, (_, i) => ({
+      owner: { login: 'user' },
+      name: `repo-${100 + i}`,
+      full_name: `user/repo-${100 + i}`,
+    }));
+
+    mockGet
+      .mockResolvedValueOnce({ data: page1 })
+      .mockResolvedValueOnce({ data: page2 });
+
+    const result = await githubApi.listUserRepos('token');
+    expect(result).toHaveLength(150);
+    expect(result[0]).toEqual({ owner: 'user', name: 'repo-0', fullName: 'user/repo-0' });
+    expect(result[149]).toEqual({ owner: 'user', name: 'repo-149', fullName: 'user/repo-149' });
+
+    expect(mockGet).toHaveBeenCalledWith('/user/repos', {
+      params: { per_page: 100, sort: 'updated', direction: 'desc', page: 1 },
+    });
+    expect(mockGet).toHaveBeenCalledWith('/user/repos', {
+      params: { per_page: 100, sort: 'updated', direction: 'desc', page: 2 },
+    });
+  });
+
+  test('listUserRepos returns empty array when no repos', async () => {
+    mockGet.mockResolvedValue({ data: [] });
+    const result = await githubApi.listUserRepos('token');
+    expect(result).toEqual([]);
+  });
+
+  test('listUserRepos handles single page', async () => {
+    mockGet.mockResolvedValue({
+      data: [{ owner: { login: 'org' }, name: 'my-repo', full_name: 'org/my-repo' }],
+    });
+    const result = await githubApi.listUserRepos('token');
+    expect(result).toEqual([{ owner: 'org', name: 'my-repo', fullName: 'org/my-repo' }]);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
 });

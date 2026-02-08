@@ -78,34 +78,62 @@
       </v-card-title>
       <v-card-text>
         <!-- Add Repo Form -->
-        <div class="d-flex flex-wrap ga-3 align-end mb-4">
-          <v-text-field
-            v-model="newRepoOwner"
-            label="Owner"
+        <div class="mb-4">
+          <v-autocomplete
+            v-if="githubReposAvailable"
+            v-model="selectedRepo"
+            :items="availableRepos"
+            :loading="loadingGithubRepos"
+            item-title="fullName"
+            item-value="fullName"
+            label="Add a repository"
+            placeholder="Search your GitHub repositories..."
             density="compact"
             variant="outlined"
             hide-details
-            placeholder="e.g. octocat"
-            style="max-width: 200px"
-          />
-          <v-text-field
-            v-model="newRepoName"
-            label="Repository"
-            density="compact"
-            variant="outlined"
-            hide-details
-            placeholder="e.g. hello-world"
-            style="max-width: 200px"
-          />
-          <v-btn
-            color="primary"
-            :loading="addingRepo"
-            :disabled="!newRepoOwner || !newRepoName"
-            @click="handleAddRepo"
+            clearable
+            @update:model-value="onRepoSelected"
           >
-            <v-icon class="mr-1">mdi-plus</v-icon>
-            Add
-          </v-btn>
+            <template #no-data>
+              <v-list-item v-if="loadingGithubRepos">
+                <v-list-item-title>Loading repositories...</v-list-item-title>
+              </v-list-item>
+              <v-list-item v-else>
+                <v-list-item-title>No matching repositories found</v-list-item-title>
+              </v-list-item>
+            </template>
+          </v-autocomplete>
+
+          <!-- Fallback to manual input when no GitHub token is available -->
+          <div v-else class="d-flex flex-wrap ga-3 align-end">
+            <v-text-field
+              v-model="newRepoOwner"
+              label="Owner"
+              density="compact"
+              variant="outlined"
+              hide-details
+              placeholder="e.g. octocat"
+              style="max-width: 200px"
+            />
+            <v-text-field
+              v-model="newRepoName"
+              label="Repository"
+              density="compact"
+              variant="outlined"
+              hide-details
+              placeholder="e.g. hello-world"
+              style="max-width: 200px"
+            />
+            <v-btn
+              color="primary"
+              :loading="addingRepo"
+              :disabled="!newRepoOwner || !newRepoName"
+              @click="handleAddRepo"
+            >
+              <v-icon class="mr-1">mdi-plus</v-icon>
+              Add
+            </v-btn>
+          </div>
         </div>
 
         <div v-if="repoMessage" class="text-caption mb-3" :class="repoError ? 'text-error' : 'text-success'">
@@ -186,11 +214,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import {
   fetchSettings, updateSettings,
   fetchRepos, addRepo, updateRepo, deleteRepo,
-  rebuildDatabase,
+  rebuildDatabase, fetchGithubRepos,
 } from '@/services/api'
 
 // --- Settings ---
@@ -259,6 +287,15 @@ const repoError = ref(false)
 const showDeleteDialog = ref(false)
 const repoToDelete = ref(null)
 const deletingRepo = ref(false)
+const selectedRepo = ref(null)
+const githubRepos = ref([])
+const loadingGithubRepos = ref(false)
+const githubReposAvailable = ref(false)
+
+const availableRepos = computed(() => {
+  const configuredSet = new Set(repos.value.map(r => `${r.owner}/${r.name}`))
+  return githubRepos.value.filter(r => !configuredSet.has(r.fullName))
+})
 
 async function loadRepos() {
   try {
@@ -266,6 +303,39 @@ async function loadRepos() {
     repos.value = data.repos
   } catch {
     // Ignore
+  }
+}
+
+async function loadGithubRepos() {
+  loadingGithubRepos.value = true
+  try {
+    const data = await fetchGithubRepos()
+    githubRepos.value = data.repos
+    githubReposAvailable.value = true
+  } catch {
+    // No token available or API error — fall back to manual input
+    githubReposAvailable.value = false
+  } finally {
+    loadingGithubRepos.value = false
+  }
+}
+
+async function onRepoSelected(fullName) {
+  if (!fullName) return
+  const [owner, name] = fullName.split('/')
+  addingRepo.value = true
+  repoMessage.value = ''
+  try {
+    await addRepo(owner, name)
+    repoMessage.value = `Added ${fullName}. Sync started.`
+    repoError.value = false
+    selectedRepo.value = null
+    await loadRepos()
+  } catch (err) {
+    repoMessage.value = err.message
+    repoError.value = true
+  } finally {
+    addingRepo.value = false
   }
 }
 
@@ -323,5 +393,6 @@ async function handleDeleteRepo() {
 onMounted(() => {
   loadSettings()
   loadRepos()
+  loadGithubRepos()
 })
 </script>

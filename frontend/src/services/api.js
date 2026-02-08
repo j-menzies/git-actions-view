@@ -74,6 +74,11 @@ export function updateSettings(settings) {
   })
 }
 
+// GitHub API (user-accessible repos)
+export function fetchGithubRepos() {
+  return request('/api/v1/github/repos')
+}
+
 // Repos API
 export function fetchRepos() {
   return request('/api/v1/repos')

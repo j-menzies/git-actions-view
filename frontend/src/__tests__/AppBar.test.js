@@ -17,7 +17,8 @@ function createTestRouter() {
   return createRouter({
     history: createWebHashHistory(),
     routes: [
-      { path: '/', name: 'Runs', component: { template: '<div />' } },
+      { path: '/', redirect: '/runs' },
+      { path: '/runs', name: 'Runs', component: { template: '<div />' } },
       { path: '/login', name: 'Login', component: { template: '<div />' } },
       { path: '/settings', name: 'Settings', component: { template: '<div />' } },
     ],
@@ -50,6 +51,15 @@ describe('AppBar', () => {
     const wrapper = mountAppBar()
     await flushPromises()
     expect(wrapper.text()).toContain('GitActionsView')
+  })
+
+  it('title links to Runs route', async () => {
+    mockFetchMe.mockResolvedValue({ login: 'dev', name: 'Developer' })
+    const wrapper = mountAppBar()
+    await flushPromises()
+    const titleLink = wrapper.find('.app-title-link')
+    expect(titleLink.exists()).toBe(true)
+    expect(titleLink.attributes('href')).toContain('/runs')
   })
 
   it('shows user info when authenticated', async () => {

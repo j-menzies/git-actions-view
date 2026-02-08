@@ -1,8 +1,10 @@
 <template>
   <v-app-bar flat border>
     <v-app-bar-title>
-      <v-icon class="mr-1">mdi-github</v-icon>
-      GitActionsView
+      <router-link :to="{ name: 'Runs' }" class="app-title-link">
+        <v-icon class="mr-1">mdi-github</v-icon>
+        GitActionsView
+      </router-link>
     </v-app-bar-title>
 
     <template #append>
@@ -57,3 +59,13 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.app-title-link {
+  text-decoration: none;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+</style>

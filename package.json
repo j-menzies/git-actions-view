@@ -1,0 +1,9 @@
+{
+  "name": "gitactionsview",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitActionsView - Chronological GitHub Actions run log",
+  "scripts": {
+    "test": "cd backend && npm test && cd ../frontend && npm test"
+  }
+}
