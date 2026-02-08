@@ -195,4 +195,26 @@ describe('RunCard', () => {
       expect(link.exists()).toBe(true)
     })
   })
+
+  describe('actor linking', () => {
+    it('links actor when actorType is User', () => {
+      const wrapper = mountCard({ actorType: 'User' })
+      const actorLink = wrapper.findAll('a').find(a => a.attributes('href')?.includes('github.com/dev1'))
+      expect(actorLink).toBeDefined()
+    })
+
+    it('links actor when actorType is null (backward compatible)', () => {
+      const wrapper = mountCard({ actorType: null })
+      const actorLink = wrapper.findAll('a').find(a => a.attributes('href')?.includes('github.com/dev1'))
+      expect(actorLink).toBeDefined()
+    })
+
+    it('does not link actor when actorType is Bot', () => {
+      const wrapper = mountCard({ actorType: 'Bot', actorLogin: 'Copilot' })
+      const actorLink = wrapper.findAll('a').find(a => a.attributes('href')?.includes('github.com/Copilot'))
+      expect(actorLink).toBeUndefined()
+      // Actor name should still be displayed
+      expect(wrapper.text()).toContain('Copilot')
+    })
+  })
 })

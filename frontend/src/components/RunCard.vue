@@ -48,8 +48,9 @@
           {{ run.event }}
         </v-chip>
 
+        <!-- Actor with link (only for real users) -->
         <a
-          v-if="run.actorLogin"
+          v-if="run.actorLogin && isActorUser"
           :href="actorUrl"
           target="_blank"
           class="d-flex align-center ga-1 text-decoration-none run-link"
@@ -58,10 +59,19 @@
           <v-avatar v-if="run.actorAvatarUrl" size="20">
             <v-img :src="run.actorAvatarUrl" :alt="run.actorLogin" />
           </v-avatar>
-          <span class="text-body-2 text-medium-emphasis">
-            {{ run.actorLogin }}
-          </span>
+          <span class="text-body-2 text-medium-emphasis">{{ run.actorLogin }}</span>
         </a>
+        <!-- Actor without link (bots, orgs) -->
+        <span
+          v-else-if="run.actorLogin"
+          class="d-flex align-center ga-1"
+        >
+          <v-avatar v-if="run.actorAvatarUrl" size="20">
+            <v-img :src="run.actorAvatarUrl" :alt="run.actorLogin" />
+          </v-avatar>
+          <span class="text-body-2 text-medium-emphasis">{{ run.actorLogin }}</span>
+        </span>
+        <!-- Avatar only, no login -->
         <template v-else>
           <v-avatar v-if="run.actorAvatarUrl" size="20">
             <v-img :src="run.actorAvatarUrl" :alt="run.actorLogin" />
@@ -126,6 +136,10 @@ const branchUrl = computed(() =>
 
 const actorUrl = computed(() =>
   `https://github.com/${props.run.actorLogin}`
+)
+
+const isActorUser = computed(() =>
+  !props.run.actorType || props.run.actorType === 'User'
 )
 
 const relativeTime = computed(() => {

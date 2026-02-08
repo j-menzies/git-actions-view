@@ -109,6 +109,7 @@ router.get('/api/v1/runs', ensureAuthenticated, (req, res) => {
     branch: r.branch,
     actorLogin: r.actor_login,
     actorAvatarUrl: r.actor_avatar_url,
+    actorType: r.actor_type || null,
     htmlUrl: r.html_url,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

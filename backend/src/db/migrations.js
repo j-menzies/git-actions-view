@@ -70,6 +70,13 @@ function runMigrations(db) {
   } catch (e) {
     // Column already exists — ignore
   }
+
+  // Add actor_type column if it doesn't exist (idempotent migration)
+  try {
+    db.exec('ALTER TABLE workflow_runs ADD COLUMN actor_type TEXT');
+  } catch (e) {
+    // Column already exists — ignore
+  }
 }
 
 module.exports = { runMigrations };

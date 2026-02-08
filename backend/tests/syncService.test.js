@@ -69,7 +69,7 @@ describe('syncService', () => {
     syncService.upsertWorkflow({ id: 1, name: 'CI' }, 'org', 'repo');
     syncService.upsertRun({
       id: 100, workflow_id: 1, run_number: 42, status: 'completed', conclusion: 'success',
-      event: 'push', head_branch: 'main', actor: { login: 'dev', avatar_url: 'https://avatar' },
+      event: 'push', head_branch: 'main', actor: { login: 'dev', avatar_url: 'https://avatar', type: 'User' },
       html_url: 'https://github.com/org/repo/actions/runs/100',
       created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:05:00Z',
       run_started_at: '2026-01-01T00:00:10Z', run_attempt: 1,
@@ -80,6 +80,23 @@ describe('syncService', () => {
     expect(row.conclusion).toBe('success');
     expect(row.branch).toBe('main');
     expect(row.actor_login).toBe('dev');
+    expect(row.actor_type).toBe('User');
+  });
+
+  test('upsertRun stores actor_type for bots', () => {
+    const db = getDb();
+
+    syncService.upsertWorkflow({ id: 1, name: 'CI' }, 'org', 'repo');
+    syncService.upsertRun({
+      id: 100, workflow_id: 1, run_number: 42, status: 'completed', conclusion: 'success',
+      event: 'push', head_branch: 'main', actor: { login: 'dependabot[bot]', avatar_url: 'https://avatar', type: 'Bot' },
+      html_url: 'https://github.com/org/repo/actions/runs/100',
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:05:00Z',
+    }, 'org', 'repo', 'CI');
+
+    const row = db.prepare('SELECT * FROM workflow_runs WHERE id = 100').get();
+    expect(row.actor_login).toBe('dependabot[bot]');
+    expect(row.actor_type).toBe('Bot');
   });
 
   test('upsertRun updates existing run', () => {
@@ -112,6 +129,7 @@ describe('syncService', () => {
     expect(row.event).toBeNull();
     expect(row.branch).toBeNull();
     expect(row.actor_login).toBeNull();
+    expect(row.actor_type).toBeNull();
   });
 
   test('upsertJob inserts new job', () => {

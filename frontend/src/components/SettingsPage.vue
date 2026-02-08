@@ -164,12 +164,12 @@
               <td>
                 <v-btn
                   icon
-                  size="x-small"
+                  size="small"
                   variant="text"
                   color="error"
                   @click="confirmDelete(repo)"
                 >
-                  <v-icon size="small">mdi-delete</v-icon>
+                  <v-icon>mdi-delete</v-icon>
                 </v-btn>
               </td>
             </tr>

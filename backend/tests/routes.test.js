@@ -50,13 +50,13 @@ function seedData() {
 
     const insertRun = db.prepare(`
       INSERT INTO workflow_runs (id, workflow_id, owner_name, repo_name, workflow_name,
-        run_number, status, conclusion, event, branch, actor_login, html_url, created_at, updated_at, run_started_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        run_number, status, conclusion, event, branch, actor_login, actor_type, html_url, created_at, updated_at, run_started_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    insertRun.run(100, 1, 'org1', 'repo-a', 'CI Build', 1, 'completed', 'success', 'push', 'main', 'dev1', 'https://github.com/org1/repo-a/actions/runs/100', '2026-01-01T10:00:00Z', '2026-01-01T10:05:00Z', '2026-01-01T10:00:05Z');
-    insertRun.run(101, 1, 'org1', 'repo-a', 'CI Build', 2, 'completed', 'failure', 'push', 'feature', 'dev2', 'https://github.com/org1/repo-a/actions/runs/101', '2026-01-01T11:00:00Z', '2026-01-01T11:03:00Z', '2026-01-01T11:00:02Z');
-    insertRun.run(102, 2, 'org2', 'repo-b', 'Deploy', 1, 'in_progress', null, 'push', 'main', 'dev1', 'https://github.com/org2/repo-b/actions/runs/102', '2026-01-01T12:00:00Z', '2026-01-01T12:01:00Z', '2026-01-01T12:00:01Z');
+    insertRun.run(100, 1, 'org1', 'repo-a', 'CI Build', 1, 'completed', 'success', 'push', 'main', 'dev1', 'User', 'https://github.com/org1/repo-a/actions/runs/100', '2026-01-01T10:00:00Z', '2026-01-01T10:05:00Z', '2026-01-01T10:00:05Z');
+    insertRun.run(101, 1, 'org1', 'repo-a', 'CI Build', 2, 'completed', 'failure', 'push', 'feature', 'dev2', 'Bot', 'https://github.com/org1/repo-a/actions/runs/101', '2026-01-01T11:00:00Z', '2026-01-01T11:03:00Z', '2026-01-01T11:00:02Z');
+    insertRun.run(102, 2, 'org2', 'repo-b', 'Deploy', 1, 'in_progress', null, 'push', 'main', 'dev1', null, 'https://github.com/org2/repo-b/actions/runs/102', '2026-01-01T12:00:00Z', '2026-01-01T12:01:00Z', '2026-01-01T12:00:01Z');
 
     const insertJob = db.prepare(`
       INSERT INTO workflow_jobs (id, run_id, name, status, conclusion, started_at, completed_at, runner_name)
@@ -231,6 +231,18 @@ describe('routes', () => {
       const run100 = res.body.runs.find(r => r.id === 100);
       expect(run100.duration).toBeDefined();
       expect(run100.duration).toContain('m');
+    });
+
+    test('includes actorType in response', async () => {
+      const app = createApp();
+      seedData();
+      const res = await request(app).get('/api/v1/runs');
+      const run100 = res.body.runs.find(r => r.id === 100);
+      const run101 = res.body.runs.find(r => r.id === 101);
+      const run102 = res.body.runs.find(r => r.id === 102);
+      expect(run100.actorType).toBe('User');
+      expect(run101.actorType).toBe('Bot');
+      expect(run102.actorType).toBeNull();
     });
 
     test('hasMore false when no more results', async () => {
