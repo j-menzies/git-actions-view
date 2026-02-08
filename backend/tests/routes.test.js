@@ -59,14 +59,14 @@ function seedData() {
     insertRun.run(102, 2, 'org2', 'repo-b', 'Deploy', 1, 'in_progress', null, 'push', 'main', 'dev1', null, 'https://github.com/org2/repo-b/actions/runs/102', '2026-01-01T12:00:00Z', '2026-01-01T12:01:00Z', '2026-01-01T12:00:01Z');
 
     const insertJob = db.prepare(`
-      INSERT INTO workflow_jobs (id, run_id, name, status, conclusion, started_at, completed_at, runner_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO workflow_jobs (id, run_id, name, status, conclusion, started_at, completed_at, runner_name, labels)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    insertJob.run(200, 100, 'build', 'completed', 'success', '2026-01-01T10:00:10Z', '2026-01-01T10:03:00Z', 'ubuntu-latest');
-    insertJob.run(201, 100, 'test', 'completed', 'success', '2026-01-01T10:03:05Z', '2026-01-01T10:04:30Z', 'ubuntu-latest');
-    insertJob.run(202, 101, 'build', 'completed', 'failure', '2026-01-01T11:00:05Z', '2026-01-01T11:02:00Z', 'ubuntu-latest');
-    insertJob.run(203, 102, 'deploy', 'in_progress', null, '2026-01-01T12:00:05Z', null, 'ubuntu-latest');
+    insertJob.run(200, 100, 'build', 'completed', 'success', '2026-01-01T10:00:10Z', '2026-01-01T10:03:00Z', 'ubuntu-latest', '["ubuntu-latest"]');
+    insertJob.run(201, 100, 'test', 'completed', 'success', '2026-01-01T10:03:05Z', '2026-01-01T10:04:30Z', 'macos-runner', '["macos-latest"]');
+    insertJob.run(202, 101, 'build', 'completed', 'failure', '2026-01-01T11:00:05Z', '2026-01-01T11:02:00Z', 'ubuntu-latest', '["windows-latest"]');
+    insertJob.run(203, 102, 'deploy', 'in_progress', null, '2026-01-01T12:00:05Z', null, 'ubuntu-latest', null);
   });
 }
 
@@ -307,6 +307,52 @@ describe('routes', () => {
       expect(res.body.jobs).toHaveLength(1);
       expect(res.body.jobs[0].conclusion).toBeNull();
       expect(res.body.jobs[0].duration).toBeNull();
+    });
+
+    test('includes billableMinutes and runnerOs for completed jobs', async () => {
+      const app = createApp();
+      seedData();
+      const res = await request(app).get('/api/v1/runs/100/jobs');
+      const buildJob = res.body.jobs.find(j => j.name === 'build');
+      const testJob = res.body.jobs.find(j => j.name === 'test');
+
+      // build: 2m50s on ubuntu-latest → 3 min * 1x = 3
+      expect(buildJob.billableMinutes).toBe(3);
+      expect(buildJob.runnerOs).toBe('linux');
+
+      // test: 1m25s on macos-latest → 2 min * 10x = 20
+      expect(testJob.billableMinutes).toBe(20);
+      expect(testJob.runnerOs).toBe('macos');
+    });
+
+    test('returns null billableMinutes for in-progress jobs', async () => {
+      const app = createApp();
+      seedData();
+      const res = await request(app).get('/api/v1/runs/102/jobs');
+      expect(res.body.jobs[0].billableMinutes).toBeNull();
+      expect(res.body.jobs[0].runnerOs).toBeNull();
+    });
+  });
+
+  describe('GET /api/v1/runs (billing)', () => {
+    test('includes totalBillableMinutes per run', async () => {
+      const app = createApp();
+      seedData();
+      const res = await request(app).get('/api/v1/runs');
+      const run100 = res.body.runs.find(r => r.id === 100);
+
+      // run 100: build (3 min linux) + test (20 min macos) = 23
+      expect(run100.totalBillableMinutes).toBe(23);
+    });
+
+    test('returns 0 totalBillableMinutes for in-progress run', async () => {
+      const app = createApp();
+      seedData();
+      const res = await request(app).get('/api/v1/runs');
+      const run102 = res.body.runs.find(r => r.id === 102);
+
+      // run 102: deploy is in-progress (no completed_at) → 0
+      expect(run102.totalBillableMinutes).toBe(0);
     });
   });
 });

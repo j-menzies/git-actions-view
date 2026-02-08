@@ -83,6 +83,11 @@
           {{ run.duration }}
         </span>
 
+        <span v-if="run.totalBillableMinutes > 0" class="text-body-2 text-medium-emphasis">
+          <v-icon size="small">mdi-cash-multiple</v-icon>
+          {{ run.totalBillableMinutes }} min
+        </span>
+
         <span class="text-body-2 text-medium-emphasis">
           {{ relativeTime }}
         </span>

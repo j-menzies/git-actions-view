@@ -9,6 +9,15 @@
       {{ job.duration }}
     </span>
 
+    <span v-if="job.billableMinutes != null" class="text-body-2 text-medium-emphasis mx-3">
+      <v-icon size="small" class="mr-1">mdi-cash-multiple</v-icon>
+      <template v-if="job.runnerOs === 'self-hosted'">self-hosted</template>
+      <template v-else>
+        {{ job.billableMinutes }} min
+        <span v-if="job.runnerOs" class="text-caption">({{ runnerLabel }})</span>
+      </template>
+    </span>
+
     <span v-if="job.runnerName" class="text-body-2 text-medium-emphasis mx-3">
       <v-icon size="small" class="mr-1">mdi-server</v-icon>
       {{ job.runnerName }}
@@ -28,12 +37,16 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import StatusChip from './StatusChip.vue'
 
-defineProps({
+const props = defineProps({
   job: Object,
   last: Boolean,
 })
+
+const runnerLabels = { linux: 'Linux 1x', windows: 'Windows 2x', macos: 'macOS 10x', 'self-hosted': 'Self-hosted' }
+const runnerLabel = computed(() => runnerLabels[props.job.runnerOs] || props.job.runnerOs)
 </script>
 
 <style scoped>

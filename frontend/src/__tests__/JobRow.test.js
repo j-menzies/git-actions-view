@@ -71,4 +71,28 @@ describe('JobRow', () => {
     const wrapper = mountJobRow({ last: true })
     expect(wrapper.find('.job-row--border').exists()).toBe(false)
   })
+
+  it('displays billable minutes for Linux jobs', () => {
+    const wrapper = mountJobRow({ job: { billableMinutes: 5, runnerOs: 'linux' } })
+    expect(wrapper.text()).toContain('5 min')
+    expect(wrapper.text()).toContain('Linux 1x')
+  })
+
+  it('displays billable minutes for macOS jobs', () => {
+    const wrapper = mountJobRow({ job: { billableMinutes: 20, runnerOs: 'macos' } })
+    expect(wrapper.text()).toContain('20 min')
+    expect(wrapper.text()).toContain('macOS 10x')
+  })
+
+  it('displays self-hosted instead of minutes', () => {
+    const wrapper = mountJobRow({ job: { billableMinutes: 0, runnerOs: 'self-hosted' } })
+    expect(wrapper.text()).toContain('self-hosted')
+    expect(wrapper.text()).not.toContain('0 min')
+  })
+
+  it('hides billable minutes when null', () => {
+    const wrapper = mountJobRow({ job: { billableMinutes: null, runnerOs: null } })
+    expect(wrapper.text()).not.toContain('min')
+    expect(wrapper.text()).not.toContain('self-hosted')
+  })
 })

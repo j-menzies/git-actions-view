@@ -152,6 +152,40 @@ describe('syncService', () => {
     expect(row.runner_name).toBe('ubuntu-latest');
   });
 
+  test('upsertJob stores labels as JSON', () => {
+    const db = getDb();
+
+    syncService.upsertWorkflow({ id: 1, name: 'CI' }, 'org', 'repo');
+    syncService.upsertRun({
+      id: 100, workflow_id: 1, run_number: 1, status: 'completed',
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:05:00Z',
+    }, 'org', 'repo', 'CI');
+    syncService.upsertJob({
+      id: 200, name: 'build', status: 'completed', conclusion: 'success',
+      started_at: '2026-01-01T00:00:05Z', completed_at: '2026-01-01T00:03:00Z',
+      labels: ['ubuntu-latest', 'x64'],
+    }, 100);
+
+    const row = db.prepare('SELECT * FROM workflow_jobs WHERE id = 200').get();
+    expect(row.labels).toBe('["ubuntu-latest","x64"]');
+  });
+
+  test('upsertJob handles missing labels', () => {
+    const db = getDb();
+
+    syncService.upsertWorkflow({ id: 1, name: 'CI' }, 'org', 'repo');
+    syncService.upsertRun({
+      id: 100, workflow_id: 1, run_number: 1, status: 'completed',
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:05:00Z',
+    }, 'org', 'repo', 'CI');
+    syncService.upsertJob({
+      id: 200, name: 'build', status: 'completed', conclusion: 'success',
+    }, 100);
+
+    const row = db.prepare('SELECT * FROM workflow_jobs WHERE id = 200').get();
+    expect(row.labels).toBeNull();
+  });
+
   test('syncRepoRuns fetches workflows and runs', async () => {
     githubApi.listWorkflows.mockResolvedValue([{ id: 1, name: 'CI', path: '.github/workflows/ci.yml', state: 'active' }]);
     githubApi.listWorkflowRuns.mockResolvedValue({

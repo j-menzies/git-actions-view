@@ -1,7 +1,7 @@
 const express = require('express');
 const { getDb } = require('../db/database');
 const { ensureAuthenticated } = require('../auth/middleware');
-const { formatDuration } = require('../utils/duration');
+const { formatDuration, calculateBillableMinutes } = require('../utils/duration');
 
 const router = express.Router();
 
@@ -97,6 +97,25 @@ router.get('/api/v1/runs', ensureAuthenticated, (req, res) => {
     }
   }
 
+  // Aggregate billable minutes per run from job-level data
+  let jobBilling = {};
+  if (runIds.length > 0) {
+    const billingPlaceholders = runIds.map(() => '?').join(',');
+    const billingRows = db
+      .prepare(
+        `SELECT run_id, started_at, completed_at, labels
+         FROM workflow_jobs
+         WHERE run_id IN (${billingPlaceholders})`
+      )
+      .all(...runIds);
+
+    for (const row of billingRows) {
+      if (!jobBilling[row.run_id]) jobBilling[row.run_id] = 0;
+      const billing = calculateBillableMinutes(row.started_at, row.completed_at, row.labels);
+      if (billing) jobBilling[row.run_id] += billing.minutes;
+    }
+  }
+
   const mapped = resultRuns.map(r => ({
     id: r.id,
     ownerName: r.owner_name,
@@ -115,6 +134,7 @@ router.get('/api/v1/runs', ensureAuthenticated, (req, res) => {
     updatedAt: r.updated_at,
     pullRequestUrl: r.pull_request_url || null,
     duration: formatDuration(r.run_started_at || r.created_at, r.updated_at),
+    totalBillableMinutes: jobBilling[r.id] || 0,
     jobSummary: jobSummaries[r.id] || { total: 0, success: 0, failure: 0, in_progress: 0, other: 0 },
   }));
 

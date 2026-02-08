@@ -77,6 +77,13 @@ function runMigrations(db) {
   } catch (e) {
     // Column already exists — ignore
   }
+
+  // Add labels column to workflow_jobs if it doesn't exist (idempotent migration)
+  try {
+    db.exec('ALTER TABLE workflow_jobs ADD COLUMN labels TEXT');
+  } catch (e) {
+    // Column already exists — ignore
+  }
 }
 
 module.exports = { runMigrations };

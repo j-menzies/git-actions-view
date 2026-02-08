@@ -66,12 +66,13 @@ function upsertJob(job, runId) {
   const db = getDb();
   const stmt = db.prepare(`
     INSERT INTO workflow_jobs (id, run_id, name, status, conclusion, started_at, completed_at,
-      html_url, runner_name, run_attempt)
+      html_url, runner_name, run_attempt, labels)
     VALUES (@id, @run_id, @name, @status, @conclusion, @started_at, @completed_at,
-      @html_url, @runner_name, @run_attempt)
+      @html_url, @runner_name, @run_attempt, @labels)
     ON CONFLICT(id) DO UPDATE SET
       status = @status, conclusion = @conclusion, started_at = @started_at,
-      completed_at = @completed_at, runner_name = @runner_name, run_attempt = @run_attempt
+      completed_at = @completed_at, runner_name = @runner_name, run_attempt = @run_attempt,
+      labels = @labels
   `);
   stmt.run({
     id: job.id,
@@ -84,6 +85,7 @@ function upsertJob(job, runId) {
     html_url: job.html_url || null,
     runner_name: job.runner_name || null,
     run_attempt: job.run_attempt || 1,
+    labels: job.labels ? JSON.stringify(job.labels) : null,
   });
 }
 
