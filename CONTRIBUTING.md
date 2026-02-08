@@ -56,20 +56,20 @@ gitactionsview/
   backend/
     src/
       auth/           # Passport.js strategies, middleware
-      db/             # SQLite setup and migrations
-      routes/         # Express route handlers
-      services/       # GitHub API client, sync service, dispatcher
+      db/             # SQLite setup and migrations (settings, repos tables)
+      routes/         # Express route handlers (runs, jobs, settings, repos, admin)
+      services/       # GitHub API, sync, dispatcher, settings, repos services
       utils/          # Helper functions (duration formatting)
-      config.js       # Environment variable parsing
+      config.js       # Environment variable parsing + loadFromDb()
       index.js        # Express app entry point
     tests/            # Jest test files
     scripts/          # Utility scripts (mock data seeder)
   frontend/
     src/
-      components/     # Vue single-file components
-      plugins/        # Vuetify configuration
+      components/     # Vue SFCs (RunCard, RunLog, SettingsPage, AppBar, etc.)
+      plugins/        # Vuetify configuration (theme persistence)
       router/         # Vue Router setup with auth guard
-      services/       # API client (fetch wrapper)
+      services/       # API client (runs, jobs, settings, repos, admin)
       __tests__/      # Vitest test files
       App.vue         # Root component
       main.js         # Vue app bootstrap

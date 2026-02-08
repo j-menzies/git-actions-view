@@ -11,7 +11,9 @@ A self-hosted web dashboard that displays a chronological log of GitHub Actions 
 - **Flexible filtering** by repository, status (success/failure/in_progress/cancelled), and branch
 - **GitHub OAuth2 login** for private repositories (same flow as [gitactionboard](https://github.com/otto-de/gitactionboard))
 - **Basic auth** option via htpasswd file
-- **Light and dark themes** matching GitHub's colour palette
+- **Light and dark themes** matching GitHub's colour palette, persisted across sessions
+- **Clickable links** — repo names, branches, PR events, and actor avatars link directly to GitHub
+- **Settings page** for managing polling intervals, repositories (add/hide/remove), and database cache rebuilds
 - **Docker-ready** single-container deployment with multi-stage build
 
 ## Architecture
@@ -67,7 +69,7 @@ The Vite dev server proxies `/api` and `/auth` requests to the backend on port 9
 
 ## Configuration
 
-All settings are configured via environment variables:
+Initial configuration is set via environment variables. Polling intervals and repository lists can also be changed at runtime through the **Settings** page (`/#/settings`), with values stored in SQLite so they survive container restarts. Environment variables serve as initial defaults.
 
 | Variable | Description | Default |
 |---|---|---|
@@ -123,6 +125,13 @@ Both OAuth2 and basic auth can be enabled simultaneously.
 | `GET /api/me` | Current user info |
 | `GET /api/v1/runs` | Paginated runs (supports `limit`, `before`, `repo`, `status`, `branch`, `from`, `to`) |
 | `GET /api/v1/runs/:id/jobs` | Jobs for a specific run |
+| `GET /api/v1/settings` | Current polling interval settings |
+| `PUT /api/v1/settings` | Update polling intervals (restarts dispatcher) |
+| `GET /api/v1/repos` | List all repositories (including hidden) |
+| `POST /api/v1/repos` | Add a repository and trigger immediate sync |
+| `PUT /api/v1/repos/:id` | Update a repository (toggle visibility) |
+| `DELETE /api/v1/repos/:id` | Delete a repository and its cached data |
+| `POST /api/v1/admin/db/rebuild` | Wipe all cached data and re-sync from GitHub |
 
 ## Testing
 

@@ -112,6 +112,7 @@ router.get('/api/v1/runs', ensureAuthenticated, (req, res) => {
     htmlUrl: r.html_url,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    pullRequestUrl: r.pull_request_url || null,
     duration: formatDuration(r.run_started_at || r.created_at, r.updated_at),
     jobSummary: jobSummaries[r.id] || { total: 0, success: 0, failure: 0, in_progress: 0, other: 0 },
   }));

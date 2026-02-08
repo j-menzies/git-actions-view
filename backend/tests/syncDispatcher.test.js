@@ -1,4 +1,5 @@
 jest.mock('../src/services/syncService');
+jest.mock('../src/services/reposService');
 
 describe('syncDispatcher', () => {
   const originalEnv = process.env;
@@ -20,6 +21,9 @@ describe('syncDispatcher', () => {
     process.env.GITHUB_REPOS = '';
     delete process.env.REPO_OWNER_NAME;
     delete process.env.REPO_NAMES;
+    const reposService = require('../src/services/reposService');
+    reposService.getVisibleRepos.mockReturnValue([]);
+
     const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
     const dispatcher = require('../src/services/syncDispatcher');
     dispatcher.start();
@@ -29,6 +33,8 @@ describe('syncDispatcher', () => {
   });
 
   test('start() calls syncRepoRuns immediately', () => {
+    const reposService = require('../src/services/reposService');
+    reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
     const syncService = require('../src/services/syncService');
     syncService.syncRepoRuns.mockResolvedValue([]);
 
@@ -45,6 +51,8 @@ describe('syncDispatcher', () => {
     process.env.DISCOVERY_POLL_SECONDS = '45';
     process.env.ACTIVE_POLL_SECONDS = '15';
     jest.resetModules();
+    const reposService = require('../src/services/reposService');
+    reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
     const syncService = require('../src/services/syncService');
     syncService.syncRepoRuns.mockResolvedValue([]);
 
@@ -60,6 +68,8 @@ describe('syncDispatcher', () => {
   });
 
   test('stop() does not throw', () => {
+    const reposService = require('../src/services/reposService');
+    reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
     const syncService = require('../src/services/syncService');
     syncService.syncRepoRuns.mockResolvedValue([]);
 
@@ -74,6 +84,8 @@ describe('syncDispatcher', () => {
     delete process.env.GITHUB_ACCESS_TOKEN;
     delete process.env.GITHUB_OAUTH2_CLIENT_ID;
     jest.resetModules();
+    const reposService = require('../src/services/reposService');
+    reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
     const syncService = require('../src/services/syncService');
     syncService.syncRepoRuns.mockResolvedValue([]);
 
@@ -82,6 +94,35 @@ describe('syncDispatcher', () => {
     dispatcher.start();
 
     expect(syncService.syncRepoRuns).not.toHaveBeenCalled();
+    consoleSpy.mockRestore();
+    dispatcher.stop();
+  });
+
+  test('restart() stops and starts again', () => {
+    const reposService = require('../src/services/reposService');
+    reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
+    const syncService = require('../src/services/syncService');
+    syncService.syncRepoRuns.mockResolvedValue([]);
+
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    const dispatcher = require('../src/services/syncDispatcher');
+    dispatcher.start();
+    expect(() => dispatcher.restart()).not.toThrow();
+    consoleSpy.mockRestore();
+    dispatcher.stop();
+  });
+
+  test('syncSingleRepo() calls syncRepoRuns for a specific repo', async () => {
+    const reposService = require('../src/services/reposService');
+    reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
+    const syncService = require('../src/services/syncService');
+    syncService.syncRepoRuns.mockResolvedValue([]);
+
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    const dispatcher = require('../src/services/syncDispatcher');
+    await dispatcher.syncSingleRepo('new-org', 'new-repo');
+
+    expect(syncService.syncRepoRuns).toHaveBeenCalledWith('new-org', 'new-repo', 'test-token');
     consoleSpy.mockRestore();
     dispatcher.stop();
   });

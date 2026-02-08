@@ -42,7 +42,7 @@ export default createVuetify({
   components,
   directives,
   theme: {
-    defaultTheme: 'githubLight',
+    defaultTheme: localStorage.getItem('gitactionsview-theme') || 'githubLight',
     themes: {
       githubLight,
       githubDark,

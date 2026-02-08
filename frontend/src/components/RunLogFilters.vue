@@ -38,7 +38,7 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
 
 const props = defineProps({
   repositories: { type: Array, default: () => [] },
@@ -52,7 +52,7 @@ const filters = reactive({
   branch: '',
 })
 
-const repoOptions = props.repositories.map(r => ({ title: r, value: r }))
+const repoOptions = computed(() => props.repositories.map(r => ({ title: r, value: r })))
 
 const statusOptions = [
   { label: 'Success', value: 'success' },

@@ -42,6 +42,20 @@ function runMigrations(db) {
       run_attempt      INTEGER DEFAULT 1
     );
 
+    CREATE TABLE IF NOT EXISTS settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS repos (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner      TEXT NOT NULL,
+      name       TEXT NOT NULL,
+      hidden     INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(owner, name)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_runs_created_at ON workflow_runs(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_runs_repo ON workflow_runs(owner_name, repo_name);
     CREATE INDEX IF NOT EXISTS idx_runs_status ON workflow_runs(status);
@@ -49,6 +63,13 @@ function runMigrations(db) {
     CREATE INDEX IF NOT EXISTS idx_runs_branch ON workflow_runs(branch);
     CREATE INDEX IF NOT EXISTS idx_jobs_run_id ON workflow_jobs(run_id);
   `);
+
+  // Add pull_request_url column if it doesn't exist (idempotent migration)
+  try {
+    db.exec('ALTER TABLE workflow_runs ADD COLUMN pull_request_url TEXT');
+  } catch (e) {
+    // Column already exists — ignore
+  }
 }
 
 module.exports = { runMigrations };

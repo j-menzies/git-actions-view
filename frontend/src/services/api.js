@@ -60,3 +60,50 @@ export async function logout() {
     credentials: 'include',
   })
 }
+
+// Settings API
+export function fetchSettings() {
+  return request('/api/v1/settings')
+}
+
+export function updateSettings(settings) {
+  return request('/api/v1/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  })
+}
+
+// Repos API
+export function fetchRepos() {
+  return request('/api/v1/repos')
+}
+
+export function addRepo(owner, name) {
+  return request('/api/v1/repos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ owner, name }),
+  })
+}
+
+export function updateRepo(id, data) {
+  return request(`/api/v1/repos/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export function deleteRepo(id) {
+  return request(`/api/v1/repos/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+// Admin API
+export function rebuildDatabase() {
+  return request('/api/v1/admin/db/rebuild', {
+    method: 'POST',
+  })
+}

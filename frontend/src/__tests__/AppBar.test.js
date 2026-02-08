@@ -19,6 +19,7 @@ function createTestRouter() {
     routes: [
       { path: '/', name: 'Runs', component: { template: '<div />' } },
       { path: '/login', name: 'Login', component: { template: '<div />' } },
+      { path: '/settings', name: 'Settings', component: { template: '<div />' } },
     ],
   })
 }

@@ -17,6 +17,12 @@ const routes = [
     component: () => import('@/components/RunLog.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: () => import('@/components/SettingsPage.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

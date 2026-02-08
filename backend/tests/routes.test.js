@@ -25,11 +25,25 @@ function createApp() {
   return app;
 }
 
+function seedRepos() {
+  jest.isolateModules(() => {
+    process.env.DB_PATH = testDbPath;
+    const { getDb } = require('../src/db/database');
+    const db = getDb();
+    db.prepare('INSERT OR IGNORE INTO repos (owner, name) VALUES (?, ?)').run('org1', 'repo-a');
+    db.prepare('INSERT OR IGNORE INTO repos (owner, name) VALUES (?, ?)').run('org2', 'repo-b');
+  });
+}
+
 function seedData() {
   jest.isolateModules(() => {
     process.env.DB_PATH = testDbPath;
     const { getDb } = require('../src/db/database');
     const db = getDb();
+
+    // Seed repos table for config route
+    db.prepare('INSERT OR IGNORE INTO repos (owner, name) VALUES (?, ?)').run('org1', 'repo-a');
+    db.prepare('INSERT OR IGNORE INTO repos (owner, name) VALUES (?, ?)').run('org2', 'repo-b');
 
     db.prepare('INSERT INTO workflows (id, name, owner_name, repo_name) VALUES (?, ?, ?, ?)').run(1, 'CI Build', 'org1', 'repo-a');
     db.prepare('INSERT INTO workflows (id, name, owner_name, repo_name) VALUES (?, ?, ?, ?)').run(2, 'Deploy', 'org2', 'repo-b');
@@ -87,6 +101,7 @@ describe('routes', () => {
   describe('GET /api/config', () => {
     test('returns config with no auth', async () => {
       const app = createApp();
+      seedRepos();
       const res = await request(app).get('/api/config');
       expect(res.status).toBe(200);
       expect(res.body.authMechanisms).toEqual([]);

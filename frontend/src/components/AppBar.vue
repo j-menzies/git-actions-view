@@ -6,6 +6,10 @@
     </v-app-bar-title>
 
     <template #append>
+      <v-btn icon :to="{ name: 'Settings' }">
+        <v-icon>mdi-cog</v-icon>
+      </v-btn>
+
       <v-btn icon @click="toggleTheme">
         <v-icon>{{ isDark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
       </v-btn>
@@ -34,7 +38,9 @@ const user = ref(null)
 const isDark = computed(() => theme.global.current.value.dark)
 
 function toggleTheme() {
-  theme.global.name.value = isDark.value ? 'githubLight' : 'githubDark'
+  const newTheme = isDark.value ? 'githubLight' : 'githubDark'
+  theme.global.name.value = newTheme
+  localStorage.setItem('gitactionsview-theme', newTheme)
 }
 
 async function handleLogout() {

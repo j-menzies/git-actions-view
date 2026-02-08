@@ -1,5 +1,6 @@
 const express = require('express');
 const config = require('../config');
+const reposService = require('../services/reposService');
 
 const router = express.Router();
 
@@ -8,10 +9,11 @@ router.get('/api/config', (req, res) => {
   if (config.isOAuth2Enabled) authMechanisms.push('OAUTH2');
   if (config.isBasicAuthEnabled) authMechanisms.push('BASIC_AUTH');
 
+  const repos = reposService.getVisibleRepos();
   res.json({
     authMechanisms,
     authRequired: config.isAuthRequired,
-    repositories: config.repos.map(r => `${r.owner}/${r.name}`),
+    repositories: repos.map(r => `${r.owner}/${r.name}`),
   });
 });
 

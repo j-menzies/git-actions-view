@@ -4,9 +4,14 @@
       <StatusChip :status="run.status" :conclusion="run.conclusion" class="mr-3" />
 
       <div class="flex-grow-1 d-flex flex-wrap align-center ga-2">
-        <span class="text-body-2 font-weight-bold">
+        <a
+          :href="repoUrl"
+          target="_blank"
+          class="text-body-2 font-weight-bold text-decoration-none run-link"
+          @click.stop
+        >
           {{ run.ownerName }}/{{ run.repoName }}
-        </span>
+        </a>
         <span class="text-body-2 text-medium-emphasis">
           {{ run.workflowName }}
         </span>
@@ -16,20 +21,52 @@
       </div>
 
       <div class="d-flex align-center ga-3 flex-shrink-0">
-        <v-chip v-if="run.branch" size="x-small" variant="tonal" color="primary" prepend-icon="mdi-source-branch">
-          {{ run.branch }}
-        </v-chip>
+        <a
+          v-if="run.branch"
+          :href="branchUrl"
+          target="_blank"
+          class="text-decoration-none"
+          @click.stop
+        >
+          <v-chip size="x-small" variant="tonal" color="primary" prepend-icon="mdi-source-branch" class="run-link-chip">
+            {{ run.branch }}
+          </v-chip>
+        </a>
 
-        <v-chip v-if="run.event" size="x-small" variant="tonal" prepend-icon="mdi-lightning-bolt">
+        <a
+          v-if="run.event && run.pullRequestUrl"
+          :href="run.pullRequestUrl"
+          target="_blank"
+          class="text-decoration-none"
+          @click.stop
+        >
+          <v-chip size="x-small" variant="tonal" prepend-icon="mdi-source-pull" class="run-link-chip">
+            {{ run.event }}
+          </v-chip>
+        </a>
+        <v-chip v-else-if="run.event" size="x-small" variant="tonal" prepend-icon="mdi-lightning-bolt">
           {{ run.event }}
         </v-chip>
 
-        <v-avatar v-if="run.actorAvatarUrl" size="20">
-          <v-img :src="run.actorAvatarUrl" :alt="run.actorLogin" />
-        </v-avatar>
-        <span v-if="run.actorLogin" class="text-body-2 text-medium-emphasis">
-          {{ run.actorLogin }}
-        </span>
+        <a
+          v-if="run.actorLogin"
+          :href="actorUrl"
+          target="_blank"
+          class="d-flex align-center ga-1 text-decoration-none run-link"
+          @click.stop
+        >
+          <v-avatar v-if="run.actorAvatarUrl" size="20">
+            <v-img :src="run.actorAvatarUrl" :alt="run.actorLogin" />
+          </v-avatar>
+          <span class="text-body-2 text-medium-emphasis">
+            {{ run.actorLogin }}
+          </span>
+        </a>
+        <template v-else>
+          <v-avatar v-if="run.actorAvatarUrl" size="20">
+            <v-img :src="run.actorAvatarUrl" :alt="run.actorLogin" />
+          </v-avatar>
+        </template>
 
         <span v-if="run.duration" class="text-body-2 text-medium-emphasis">
           <v-icon size="small">mdi-timer-outline</v-icon>
@@ -79,6 +116,18 @@ const props = defineProps({
 
 const expanded = ref(false)
 
+const repoUrl = computed(() =>
+  `https://github.com/${props.run.ownerName}/${props.run.repoName}`
+)
+
+const branchUrl = computed(() =>
+  `https://github.com/${props.run.ownerName}/${props.run.repoName}/tree/${props.run.branch}`
+)
+
+const actorUrl = computed(() =>
+  `https://github.com/${props.run.actorLogin}`
+)
+
 const relativeTime = computed(() => {
   const now = new Date()
   const created = new Date(props.run.createdAt)
@@ -115,5 +164,14 @@ const jobBadgeColor = computed(() => {
 }
 .run-card:hover {
   background-color: rgba(var(--v-theme-on-surface), 0.04);
+}
+.run-link {
+  color: inherit;
+}
+.run-link:hover {
+  text-decoration: underline !important;
+}
+.run-link-chip:hover {
+  opacity: 0.85;
 }
 </style>

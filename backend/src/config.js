@@ -45,6 +45,28 @@ const config = {
 
     return [];
   },
+
+  /**
+   * Override polling intervals from database settings.
+   * Call after DB is initialized. Silently uses env var defaults if no DB values.
+   */
+  loadFromDb() {
+    try {
+      const { getDb } = require('./db/database');
+      const db = getDb();
+      const rows = db.prepare('SELECT key, value FROM settings').all();
+      for (const row of rows) {
+        if (row.key === 'discovery_poll_seconds') {
+          this.discoveryPollSeconds = parseInt(row.value, 10) || this.discoveryPollSeconds;
+        }
+        if (row.key === 'active_poll_seconds') {
+          this.activePollSeconds = parseInt(row.value, 10) || this.activePollSeconds;
+        }
+      }
+    } catch (e) {
+      // DB not ready yet or settings table doesn't exist — use env defaults
+    }
+  },
 };
 
 module.exports = config;

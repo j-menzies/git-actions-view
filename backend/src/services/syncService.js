@@ -21,16 +21,23 @@ function upsertWorkflow(workflow, ownerName, repoName) {
 
 function upsertRun(run, ownerName, repoName, workflowName) {
   const db = getDb();
+
+  // Extract pull request URL if present
+  const pullRequestUrl = run.pull_requests && run.pull_requests.length > 0
+    ? `https://github.com/${ownerName}/${repoName}/pull/${run.pull_requests[0].number}`
+    : null;
+
   const stmt = db.prepare(`
     INSERT INTO workflow_runs (id, workflow_id, owner_name, repo_name, workflow_name, run_number,
       status, conclusion, event, branch, actor_login, actor_avatar_url, html_url,
-      created_at, updated_at, run_started_at, run_attempt)
+      created_at, updated_at, run_started_at, run_attempt, pull_request_url)
     VALUES (@id, @workflow_id, @owner_name, @repo_name, @workflow_name, @run_number,
       @status, @conclusion, @event, @branch, @actor_login, @actor_avatar_url, @html_url,
-      @created_at, @updated_at, @run_started_at, @run_attempt)
+      @created_at, @updated_at, @run_started_at, @run_attempt, @pull_request_url)
     ON CONFLICT(id) DO UPDATE SET
       status = @status, conclusion = @conclusion, updated_at = @updated_at,
-      run_started_at = @run_started_at, run_attempt = @run_attempt
+      run_started_at = @run_started_at, run_attempt = @run_attempt,
+      pull_request_url = @pull_request_url
   `);
   stmt.run({
     id: run.id,
@@ -50,6 +57,7 @@ function upsertRun(run, ownerName, repoName, workflowName) {
     updated_at: run.updated_at,
     run_started_at: run.run_started_at || null,
     run_attempt: run.run_attempt || 1,
+    pull_request_url: pullRequestUrl,
   });
 }
 
@@ -142,7 +150,9 @@ async function syncActiveRun(owner, repo, runId, accessToken) {
       upsertJob(job, runId);
     }
 
-    return run.status === 'completed';
+    // Only mark as done if run is completed AND all jobs have resolved
+    const allJobsDone = jobs.every(j => j.conclusion !== null);
+    return run.status === 'completed' && allJobsDone;
   } catch (err) {
     console.error(`Failed to sync active run ${runId}: ${err.message}`);
     return false;

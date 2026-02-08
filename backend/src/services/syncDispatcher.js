@@ -1,6 +1,6 @@
-const cron = require('node-cron');
 const config = require('../config');
 const { syncRepoRuns, syncActiveRun } = require('./syncService');
+const reposService = require('./reposService');
 
 // Set of active (in-flight) runs: { id, owner, repo }
 const activeRuns = new Map();
@@ -18,7 +18,8 @@ async function runDiscovery() {
   const token = config.githubAccessToken;
 
   try {
-    for (const repo of config.repos) {
+    const repos = reposService.getVisibleRepos();
+    for (const repo of repos) {
       const newActive = await syncRepoRuns(repo.owner, repo.name, token);
       for (const run of newActive) {
         const key = `${run.owner}/${run.repo}/${run.id}`;
@@ -55,7 +56,8 @@ async function pollActiveRuns() {
 }
 
 function start() {
-  if (config.repos.length === 0) {
+  const repos = reposService.getVisibleRepos();
+  if (repos.length === 0) {
     console.warn('No repositories configured. Sync dispatcher not started.');
     return;
   }
@@ -77,7 +79,41 @@ function start() {
 function stop() {
   if (discoveryTimer) clearInterval(discoveryTimer);
   if (activeTimer) clearInterval(activeTimer);
+  discoveryTimer = null;
+  activeTimer = null;
   activeRuns.clear();
 }
 
-module.exports = { start, stop };
+/**
+ * Restart the dispatcher (e.g. after polling interval changes).
+ */
+function restart() {
+  stop();
+  start();
+}
+
+/**
+ * Run a one-time sync for a single repo (e.g. after adding a new repo).
+ * @param {string} owner
+ * @param {string} name
+ */
+async function syncSingleRepo(owner, name) {
+  if (!config.githubAccessToken && !config.isOAuth2Enabled) {
+    return;
+  }
+  const token = config.githubAccessToken;
+  try {
+    const newActive = await syncRepoRuns(owner, name, token);
+    for (const run of newActive) {
+      const key = `${run.owner}/${run.repo}/${run.id}`;
+      if (!activeRuns.has(key)) {
+        activeRuns.set(key, run);
+      }
+    }
+    console.log(`Single repo sync complete for ${owner}/${name}`);
+  } catch (err) {
+    console.error(`Single repo sync error for ${owner}/${name}: ${err.message}`);
+  }
+}
+
+module.exports = { start, stop, restart, syncSingleRepo };
