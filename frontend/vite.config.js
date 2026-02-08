@@ -14,8 +14,18 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:8080',
-      '/auth': 'http://localhost:8080',
+      '/api': 'http://localhost:9000',
+      '/auth': 'http://localhost:9000',
+    },
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/__tests__/setup.js'],
+    server: {
+      deps: {
+        inline: ['vuetify'],
+      },
     },
   },
 })

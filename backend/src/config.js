@@ -1,5 +1,5 @@
 const config = {
-  port: parseInt(process.env.PORT || '8080', 10),
+  port: parseInt(process.env.PORT || '9000', 10),
   domainName: process.env.DOMAIN_NAME || 'https://api.github.com',
   githubAccessToken: process.env.GITHUB_ACCESS_TOKEN || '',
   githubOAuth2ClientId: process.env.GITHUB_OAUTH2_CLIENT_ID || '',

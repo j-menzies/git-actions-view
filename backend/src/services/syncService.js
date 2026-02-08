@@ -149,4 +149,4 @@ async function syncActiveRun(owner, repo, runId, accessToken) {
   }
 }
 
-module.exports = { syncRepoRuns, syncActiveRun };
+module.exports = { upsertWorkflow, upsertRun, upsertJob, syncRepoRuns, syncActiveRun };

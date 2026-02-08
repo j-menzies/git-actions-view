@@ -14,6 +14,6 @@ RUN npm ci --omit=dev
 COPY backend/src/ ./src/
 COPY --from=frontend-build /app/frontend/dist ./public/
 RUN mkdir -p /app/data
-EXPOSE 8080
+EXPOSE 9000
 ENV NODE_ENV=production
 CMD ["node", "src/index.js"]
