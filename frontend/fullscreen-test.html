@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fullscreen Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .fullscreen-btn {
+            background: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 20px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+        }
+        .fullscreen-btn:hover {
+            background: #45a049;
+        }
+        .fullscreen-btn:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+        }
+        .keyboard-shortcuts {
+            margin-top: 30px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖥️ Fullscreen Test</h1>
+        <p>This page demonstrates the fullscreen functionality that has been added to your Git Actions Viewer.</p>
+        
+        <div class="status">
+            <strong>Status:</strong> <span id="status">Not in fullscreen</span><br>
+            <strong>Support:</strong> <span id="support">Checking...</span>
+        </div>
+
+        <button id="toggleBtn" class="fullscreen-btn">Enter Fullscreen</button>
+        
+        <div class="keyboard-shortcuts">
+            <strong>Keyboard Shortcuts:</strong><br>
+            • Press <kbd>F11</kbd> to toggle fullscreen<br>
+            • Press <kbd>Ctrl+Shift+F</kbd> (or <kbd>Cmd+Shift+F</kbd> on Mac) to toggle fullscreen<br>
+            • Press <kbd>Escape</kbd> to exit fullscreen
+        </div>
+    </div>
+
+    <script>
+        // Fullscreen functionality (same as the Vue composable)
+        let isFullscreen = false;
+        let isSupported = false;
+
+        const statusEl = document.getElementById('status');
+        const supportEl = document.getElementById('support');
+        const toggleBtn = document.getElementById('toggleBtn');
+
+        function updateFullscreenState() {
+            isFullscreen = Boolean(
+                document.fullscreenElement ||
+                document.webkitFullscreenElement ||
+                document.mozFullScreenElement ||
+                document.msFullscreenElement
+            );
+
+            statusEl.textContent = isFullscreen ? 'In fullscreen mode' : 'Not in fullscreen';
+            toggleBtn.textContent = isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen';
+        }
+
+        async function requestFullscreen() {
+            const element = document.documentElement;
+
+            try {
+                if (element.requestFullscreen) {
+                    await element.requestFullscreen();
+                } else if (element.webkitRequestFullscreen) {
+                    await element.webkitRequestFullscreen();
+                } else if (element.mozRequestFullScreen) {
+                    await element.mozRequestFullScreen();
+                } else if (element.msRequestFullscreen) {
+                    await element.msRequestFullscreen();
+                }
+            } catch (error) {
+                console.error('Failed to enter fullscreen:', error);
+                alert('Failed to enter fullscreen mode');
+            }
+        }
+
+        async function exitFullscreen() {
+            try {
+                if (document.exitFullscreen) {
+                    await document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    await document.webkitExitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    await document.mozCancelFullScreen();
+                } else if (document.msExitFullscreen) {
+                    await document.msExitFullscreen();
+                }
+            } catch (error) {
+                console.error('Failed to exit fullscreen:', error);
+                alert('Failed to exit fullscreen mode');
+            }
+        }
+
+        async function toggleFullscreen() {
+            if (isFullscreen) {
+                await exitFullscreen();
+            } else {
+                await requestFullscreen();
+            }
+        }
+
+        // Keyboard shortcuts
+        function handleKeydown(event) {
+            if (event.key === 'F11') {
+                event.preventDefault();
+                toggleFullscreen();
+            } else if (event.key === 'f' && event.shiftKey && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                toggleFullscreen();
+            }
+        }
+
+        // Initialize
+        function init() {
+            // Check if fullscreen is supported
+            isSupported = Boolean(
+                document.fullscreenEnabled ||
+                document.webkitFullscreenEnabled ||
+                document.mozFullScreenEnabled ||
+                document.msFullscreenEnabled
+            );
+
+            supportEl.textContent = isSupported ? 'Supported ✅' : 'Not supported ❌';
+            toggleBtn.disabled = !isSupported;
+
+            if (isSupported) {
+                // Listen for fullscreen changes
+                const events = [
+                    'fullscreenchange',
+                    'webkitfullscreenchange',
+                    'mozfullscreenchange',
+                    'MSFullscreenChange'
+                ];
+
+                events.forEach(event => {
+                    document.addEventListener(event, updateFullscreenState);
+                });
+
+                // Button click handler
+                toggleBtn.addEventListener('click', toggleFullscreen);
+
+                // Keyboard shortcuts
+                document.addEventListener('keydown', handleKeydown);
+
+                // Initial state
+                updateFullscreenState();
+            }
+        }
+
+        // Start when page loads
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
