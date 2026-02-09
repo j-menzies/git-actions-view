@@ -1,6 +1,7 @@
 const config = require('../config');
 const { syncRepoRuns, syncActiveRun } = require('./syncService');
 const reposService = require('./reposService');
+const { broadcast } = require('./sseManager');
 
 // Set of active (in-flight) runs: { id, owner, repo, trackedSince }
 const activeRuns = new Map();
@@ -8,6 +9,9 @@ let discoveryTimer = null;
 let activeTimer = null;
 let isSyncing = false;
 const MAX_ACTIVE_TRACKING_MS = 30 * 60 * 1000; // 30 minutes
+
+let lastDiscoveryPollTime = null;
+let lastActivePollTime = null;
 
 async function runDiscovery() {
   if (isSyncing) return;
@@ -21,7 +25,10 @@ async function runDiscovery() {
   try {
     const repos = reposService.getVisibleRepos();
     for (const repo of repos) {
+      const repoFullName = `${repo.owner}/${repo.name}`;
+      broadcast('sync:start', { repo: repoFullName, type: 'discovery' });
       const newActive = await syncRepoRuns(repo.owner, repo.name, token);
+      broadcast('sync:complete', { repo: repoFullName, type: 'discovery' });
       for (const run of newActive) {
         const key = `${run.owner}/${run.repo}/${run.id}`;
         if (!activeRuns.has(key)) {
@@ -36,6 +43,8 @@ async function runDiscovery() {
     console.error('Discovery sync error:', err.message);
   } finally {
     isSyncing = false;
+    lastDiscoveryPollTime = new Date().toISOString();
+    broadcast('sync:poll', { lastPollTime: lastDiscoveryPollTime, type: 'discovery' });
   }
 }
 
@@ -46,7 +55,10 @@ async function pollActiveRuns() {
   const entries = Array.from(activeRuns.entries());
   for (const [key, run] of entries) {
     try {
+      const repoFullName = `${run.owner}/${run.repo}`;
+      broadcast('sync:start', { repo: repoFullName, type: 'active' });
       const isCompleted = await syncActiveRun(run.owner, run.repo, run.id, token);
+      broadcast('sync:complete', { repo: repoFullName, type: 'active' });
       const isStale = Date.now() - run.trackedSince > MAX_ACTIVE_TRACKING_MS;
       if (isCompleted || isStale) {
         if (isStale && !isCompleted) {
@@ -58,6 +70,8 @@ async function pollActiveRuns() {
       console.error(`Active poll error for ${key}: ${err.message}`);
     }
   }
+  lastActivePollTime = new Date().toISOString();
+  broadcast('sync:poll', { lastPollTime: lastActivePollTime, type: 'active' });
 }
 
 function start() {
@@ -107,8 +121,11 @@ async function syncSingleRepo(owner, name) {
     return;
   }
   const token = config.githubAccessToken;
+  const repoFullName = `${owner}/${name}`;
   try {
+    broadcast('sync:start', { repo: repoFullName, type: 'single' });
     const newActive = await syncRepoRuns(owner, name, token);
+    broadcast('sync:complete', { repo: repoFullName, type: 'single' });
     for (const run of newActive) {
       const key = `${run.owner}/${run.repo}/${run.id}`;
       if (!activeRuns.has(key)) {
@@ -117,8 +134,13 @@ async function syncSingleRepo(owner, name) {
     }
     console.log(`Single repo sync complete for ${owner}/${name}`);
   } catch (err) {
+    broadcast('sync:complete', { repo: repoFullName, type: 'single' });
     console.error(`Single repo sync error for ${owner}/${name}: ${err.message}`);
   }
 }
 
-module.exports = { start, stop, restart, syncSingleRepo };
+function getLastPollTimes() {
+  return { discovery: lastDiscoveryPollTime, active: lastActivePollTime };
+}
+
+module.exports = { start, stop, restart, syncSingleRepo, getLastPollTimes };

@@ -13,10 +13,12 @@ import { useRoute } from 'vue-router'
 import AppBar from './components/AppBar.vue'
 import { provideFilters } from './composables/useFilters'
 import { useFullscreen } from './composables/useFullscreen'
+import { provideSyncStatus } from './composables/useSyncStatus'
 
 const route = useRoute()
 const showAppBar = computed(() => route.name !== 'Login')
 const { toggleFullscreen } = useFullscreen()
+const { connect: connectSSE, disconnect: disconnectSSE } = provideSyncStatus()
 
 // Keyboard shortcut for fullscreen (F11 or Ctrl/Cmd + Shift + F)
 const handleKeydown = (event) => {
@@ -31,10 +33,12 @@ const handleKeydown = (event) => {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
+  connectSSE()
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
+  disconnectSSE()
 })
 
 provideFilters()

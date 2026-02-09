@@ -11,9 +11,12 @@ const router = express.Router();
  */
 router.get('/api/v1/settings', ensureAuthenticated, (req, res) => {
   const intervals = settingsService.getPollingIntervals();
+  const pollTimes = syncDispatcher.getLastPollTimes();
   res.json({
     discoveryPollSeconds: intervals.discoveryPollSeconds,
     activePollSeconds: intervals.activePollSeconds,
+    lastDiscoveryPoll: pollTimes.discovery,
+    lastActivePoll: pollTimes.active,
   });
 });
 

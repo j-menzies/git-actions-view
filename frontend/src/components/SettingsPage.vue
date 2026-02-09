@@ -41,6 +41,16 @@
         <div v-if="settingsMessage" class="text-caption mt-2" :class="settingsError ? 'text-error' : 'text-success'">
           {{ settingsMessage }}
         </div>
+        <div class="text-caption text-medium-emphasis mt-3">
+          <v-icon size="small" class="mr-1">mdi-clock-outline</v-icon>
+          Last discovery poll: <strong>{{ timeAgo(syncState.lastDiscoveryPoll) }}</strong>
+          <span class="mx-2">|</span>
+          Last active run poll: <strong>{{ timeAgo(syncState.lastActivePoll) }}</strong>
+          <span v-if="syncState.syncingRepo" class="ml-2">
+            <v-progress-circular indeterminate size="12" width="2" class="mr-1" />
+            Syncing {{ syncState.syncingRepo }}
+          </span>
+        </div>
       </v-card-text>
     </v-card>
 
@@ -51,6 +61,41 @@
         Database
       </v-card-title>
       <v-card-text>
+        <v-table v-if="dbStats" density="compact" class="mb-4">
+          <tbody>
+            <tr>
+              <td class="text-medium-emphasis" style="width: 160px">File Size</td>
+              <td>{{ formatFileSize(dbStats.fileSizeBytes) }}</td>
+            </tr>
+            <tr>
+              <td class="text-medium-emphasis">Location</td>
+              <td class="text-body-2" style="word-break: break-all">{{ dbStats.filePath }}</td>
+            </tr>
+            <tr>
+              <td class="text-medium-emphasis">Oldest Run</td>
+              <td>{{ dbStats.dataAge.oldest ? new Date(dbStats.dataAge.oldest).toLocaleString() : 'No data' }}</td>
+            </tr>
+            <tr>
+              <td class="text-medium-emphasis">Newest Run</td>
+              <td>{{ dbStats.dataAge.newest ? new Date(dbStats.dataAge.newest).toLocaleString() : 'No data' }}</td>
+            </tr>
+            <tr>
+              <td class="text-medium-emphasis">Workflow Runs</td>
+              <td>{{ dbStats.rowCounts.workflowRuns.toLocaleString() }}</td>
+            </tr>
+            <tr>
+              <td class="text-medium-emphasis">Jobs</td>
+              <td>{{ dbStats.rowCounts.workflowJobs.toLocaleString() }}</td>
+            </tr>
+            <tr>
+              <td class="text-medium-emphasis">Workflows</td>
+              <td>{{ dbStats.rowCounts.workflows.toLocaleString() }}</td>
+            </tr>
+          </tbody>
+        </v-table>
+
+        <v-divider class="mb-3" />
+
         <p class="text-body-2 text-medium-emphasis mb-3">
           Rebuild the cache by deleting all workflow data and re-syncing from GitHub.
           This can fix stale or incorrect data.
@@ -144,35 +189,89 @@
         <v-table v-if="repos.length > 0" density="compact">
           <thead>
             <tr>
-              <th>Repository</th>
-              <th style="width: 120px">Visible</th>
-              <th style="width: 80px">Actions</th>
+              <th class="font-weight-bold">Repository</th>
+              <th class="font-weight-bold" style="width: 120px">Visible</th>
+              <th class="font-weight-bold" style="width: 80px">Actions</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="repo in repos" :key="repo.id">
-              <td class="text-body-2">{{ repo.owner }}/{{ repo.name }}</td>
-              <td>
-                <v-switch
-                  :model-value="!repo.hidden"
-                  density="compact"
-                  hide-details
-                  color="primary"
-                  @update:model-value="(val) => toggleHidden(repo, !val)"
-                />
-              </td>
-              <td>
-                <v-btn
-                  icon
-                  size="small"
-                  variant="text"
-                  color="error"
-                  @click="confirmDelete(repo)"
-                >
-                  <v-icon>mdi-delete</v-icon>
-                </v-btn>
-              </td>
-            </tr>
+            <template v-for="repo in repos" :key="repo.id">
+              <tr style="cursor: pointer" @click="toggleRepoExpand(repo)">
+                <td class="text-body-2">
+                  <v-icon size="small" class="mr-1">
+                    {{ expandedRepoId === repo.id ? 'mdi-chevron-down' : 'mdi-chevron-right' }}
+                  </v-icon>
+                  {{ repo.owner }}/{{ repo.name }}
+                  <v-chip
+                    v-if="syncState.syncingRepo === `${repo.owner}/${repo.name}`"
+                    size="x-small"
+                    color="primary"
+                    variant="tonal"
+                    class="ml-2"
+                  >
+                    <v-progress-circular indeterminate size="10" width="1" class="mr-1" />
+                    Syncing
+                  </v-chip>
+                </td>
+                <td>
+                  <v-switch
+                    :model-value="!repo.hidden"
+                    density="compact"
+                    hide-details
+                    color="primary"
+                    @click.stop
+                    @update:model-value="(val) => toggleHidden(repo, !val)"
+                  />
+                </td>
+                <td>
+                  <v-btn
+                    icon
+                    size="small"
+                    variant="text"
+                    color="error"
+                    @click.stop="confirmDelete(repo)"
+                  >
+                    <v-icon>mdi-delete</v-icon>
+                  </v-btn>
+                </td>
+              </tr>
+              <tr v-if="expandedRepoId === repo.id">
+                <td colspan="3" class="pa-0">
+                  <v-card flat class="ma-2 pa-3" color="surface-variant" variant="tonal">
+                    <div v-if="loadingRepoStats" class="text-center pa-4">
+                      <v-progress-circular indeterminate size="24" />
+                    </div>
+                    <div v-else-if="repoStats">
+                      <div class="d-flex flex-wrap ga-6">
+                        <div>
+                          <div class="text-caption text-medium-emphasis">Workflow Runs</div>
+                          <div class="text-body-1 font-weight-medium">{{ repoStats.runCount.toLocaleString() }}</div>
+                        </div>
+                        <div>
+                          <div class="text-caption text-medium-emphasis">Workflows</div>
+                          <div class="text-body-1 font-weight-medium">{{ repoStats.workflowCount }}</div>
+                        </div>
+                        <div>
+                          <div class="text-caption text-medium-emphasis">Jobs</div>
+                          <div class="text-body-1 font-weight-medium">{{ repoStats.jobCount.toLocaleString() }}</div>
+                        </div>
+                        <div>
+                          <div class="text-caption text-medium-emphasis">Est. Data Size</div>
+                          <div class="text-body-1 font-weight-medium">{{ formatFileSize(repoStats.estimatedSizeBytes) }}</div>
+                        </div>
+                        <div>
+                          <div class="text-caption text-medium-emphasis">Latest Run</div>
+                          <div class="text-body-1 font-weight-medium">
+                            {{ repoStats.latestRun ? new Date(repoStats.latestRun).toLocaleString() : 'No data' }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-else class="text-body-2 text-medium-emphasis">Failed to load metrics.</div>
+                  </v-card>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </v-table>
         <p v-else class="text-body-2 text-medium-emphasis">No repositories configured.</p>
@@ -214,12 +313,29 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import {
   fetchSettings, updateSettings,
   fetchRepos, addRepo, updateRepo, deleteRepo,
   rebuildDatabase, fetchGithubRepos,
+  fetchDbStats, fetchRepoStats,
 } from '@/services/api'
+import { useSyncStatus } from '@/composables/useSyncStatus'
+
+const syncState = useSyncStatus()
+
+// --- Time display ---
+const now = ref(Date.now())
+let nowTimer = null
+
+function timeAgo(isoString) {
+  if (!isoString) return 'Never'
+  const seconds = Math.floor((now.value - new Date(isoString).getTime()) / 1000)
+  if (seconds < 5) return 'Just now'
+  if (seconds < 60) return `${seconds}s ago`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  return `${Math.floor(seconds / 3600)}h ago`
+}
 
 // --- Settings ---
 const settings = reactive({ discoveryPollSeconds: 60, activePollSeconds: 10 })
@@ -232,6 +348,12 @@ async function loadSettings() {
     const data = await fetchSettings()
     settings.discoveryPollSeconds = data.discoveryPollSeconds
     settings.activePollSeconds = data.activePollSeconds
+    if (data.lastDiscoveryPoll && !syncState.lastDiscoveryPoll) {
+      syncState.lastDiscoveryPoll = data.lastDiscoveryPoll
+    }
+    if (data.lastActivePoll && !syncState.lastActivePoll) {
+      syncState.lastActivePoll = data.lastActivePoll
+    }
   } catch {
     // Use defaults
   }
@@ -260,6 +382,27 @@ const showRebuildDialog = ref(false)
 const rebuilding = ref(false)
 const rebuildMessage = ref('')
 const rebuildError = ref(false)
+const dbStats = ref(null)
+
+async function loadDbStats() {
+  try {
+    dbStats.value = await fetchDbStats()
+  } catch {
+    // ignore
+  }
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let i = 0
+  let size = bytes
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024
+    i++
+  }
+  return `${size.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
 
 async function handleRebuild() {
   rebuilding.value = true
@@ -323,13 +466,14 @@ async function loadGithubRepos() {
 async function onRepoSelected(fullName) {
   if (!fullName) return
   const [owner, name] = fullName.split('/')
+  selectedRepo.value = null
+  await nextTick()
   addingRepo.value = true
   repoMessage.value = ''
   try {
     await addRepo(owner, name)
     repoMessage.value = `Added ${fullName}. Sync started.`
     repoError.value = false
-    selectedRepo.value = null
     await loadRepos()
   } catch (err) {
     repoMessage.value = err.message
@@ -354,6 +498,28 @@ async function handleAddRepo() {
     repoError.value = true
   } finally {
     addingRepo.value = false
+  }
+}
+
+// --- Repo Metrics ---
+const expandedRepoId = ref(null)
+const repoStats = ref(null)
+const loadingRepoStats = ref(false)
+
+async function toggleRepoExpand(repo) {
+  if (expandedRepoId.value === repo.id) {
+    expandedRepoId.value = null
+    repoStats.value = null
+    return
+  }
+  expandedRepoId.value = repo.id
+  loadingRepoStats.value = true
+  try {
+    repoStats.value = await fetchRepoStats(repo.id)
+  } catch {
+    repoStats.value = null
+  } finally {
+    loadingRepoStats.value = false
   }
 }
 
@@ -394,5 +560,11 @@ onMounted(() => {
   loadSettings()
   loadRepos()
   loadGithubRepos()
+  loadDbStats()
+  nowTimer = setInterval(() => { now.value = Date.now() }, 1000)
+})
+
+onUnmounted(() => {
+  if (nowTimer) clearInterval(nowTimer)
 })
 </script>

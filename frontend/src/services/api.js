@@ -112,3 +112,12 @@ export function rebuildDatabase() {
     method: 'POST',
   })
 }
+
+export function fetchDbStats() {
+  return request('/api/v1/admin/db/stats')
+}
+
+// Repo stats API
+export function fetchRepoStats(id) {
+  return request(`/api/v1/repos/${id}/stats`)
+}

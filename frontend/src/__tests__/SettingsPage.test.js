@@ -13,6 +13,8 @@ const mockUpdateRepo = vi.fn()
 const mockDeleteRepo = vi.fn()
 const mockRebuildDatabase = vi.fn()
 const mockFetchGithubRepos = vi.fn()
+const mockFetchDbStats = vi.fn()
+const mockFetchRepoStats = vi.fn()
 
 vi.mock('@/services/api', () => ({
   fetchSettings: (...args) => mockFetchSettings(...args),
@@ -23,6 +25,8 @@ vi.mock('@/services/api', () => ({
   deleteRepo: (...args) => mockDeleteRepo(...args),
   rebuildDatabase: (...args) => mockRebuildDatabase(...args),
   fetchGithubRepos: (...args) => mockFetchGithubRepos(...args),
+  fetchDbStats: (...args) => mockFetchDbStats(...args),
+  fetchRepoStats: (...args) => mockFetchRepoStats(...args),
 }))
 
 function createTestRouter() {
@@ -59,8 +63,16 @@ describe('SettingsPage', () => {
     mockDeleteRepo.mockReset()
     mockRebuildDatabase.mockReset()
     mockFetchGithubRepos.mockReset()
+    mockFetchDbStats.mockReset()
+    mockFetchRepoStats.mockReset()
 
     mockFetchSettings.mockResolvedValue({ discoveryPollSeconds: 60, activePollSeconds: 10 })
+    mockFetchDbStats.mockResolvedValue({
+      fileSizeBytes: 1048576,
+      filePath: '/data/gitactionsview.db',
+      rowCounts: { workflows: 5, workflowRuns: 100, workflowJobs: 500, repos: 3 },
+      dataAge: { oldest: '2025-01-01T00:00:00Z', newest: '2026-02-01T00:00:00Z' },
+    })
     mockFetchRepos.mockResolvedValue({ repos: [] })
     mockFetchGithubRepos.mockResolvedValue({
       repos: [
