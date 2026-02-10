@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createTestVuetify } from './setup'
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { h, defineComponent } from 'vue'
+import { h, defineComponent, ref } from 'vue'
 import AppBar from '@/components/AppBar.vue'
 import { provideFilters } from '@/composables/useFilters'
 
@@ -56,10 +56,10 @@ describe('AppBar', () => {
   beforeEach(() => {
     mockFetchMe.mockReset()
     mockLogout.mockReset()
-    // Reset to default mock values
+    // Reset to default mock values — must use real refs for template auto-unwrapping
     mockUseFullscreen.mockReturnValue({
-      isFullscreen: { value: false },
-      isSupported: { value: true },
+      isFullscreen: ref(false),
+      isSupported: ref(true),
       toggleFullscreen: vi.fn(),
     })
   })
@@ -144,10 +144,10 @@ describe('AppBar', () => {
   })
 
   it('hides fullscreen button when fullscreen is not supported', async () => {
-    // Override mock for this specific test
+    // Override mock for this specific test — must use real refs
     mockUseFullscreen.mockReturnValueOnce({
-      isFullscreen: { value: false },
-      isSupported: { value: false },
+      isFullscreen: ref(false),
+      isSupported: ref(false),
       toggleFullscreen: vi.fn(),
     })
     mockFetchMe.mockResolvedValue({ login: 'dev' })
@@ -172,8 +172,8 @@ describe('AppBar', () => {
   it('calls toggleFullscreen when fullscreen button is clicked', async () => {
     const mockToggleFullscreen = vi.fn()
     mockUseFullscreen.mockReturnValue({
-      isFullscreen: { value: false },
-      isSupported: { value: true },
+      isFullscreen: ref(false),
+      isSupported: ref(true),
       toggleFullscreen: mockToggleFullscreen,
     })
     mockFetchMe.mockResolvedValue({ login: 'dev' })

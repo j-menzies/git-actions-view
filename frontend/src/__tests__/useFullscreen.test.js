@@ -1,42 +1,45 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { defineComponent } from 'vue'
 import { useFullscreen } from '@/composables/useFullscreen'
 
-// Create a simple test setup that just calls the composable
-function setupUseFullscreen() {
-  // Mock document for this test
-  const mockElement = {
-    requestFullscreen: vi.fn().mockResolvedValue(),
-    webkitRequestFullscreen: vi.fn().mockResolvedValue(),
-  }
-
-  const mockDocument = {
-    fullscreenElement: null,
-    fullscreenEnabled: true,
-    exitFullscreen: vi.fn().mockResolvedValue(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    documentElement: mockElement,
-  }
-
-  // Mock the global document
-  vi.stubGlobal('document', mockDocument)
-
-  return { mockElement, mockDocument }
+// Mount a wrapper component so onMounted fires
+function mountWithFullscreen() {
+  let result
+  const Wrapper = defineComponent({
+    setup() {
+      result = useFullscreen()
+      return {}
+    },
+    template: '<div />',
+  })
+  const wrapper = mount(Wrapper)
+  return { wrapper, result }
 }
 
 describe('useFullscreen', () => {
+  let origRequestFullscreen
+
   beforeEach(() => {
     vi.clearAllMocks()
+    // Patch fullscreen properties onto the real jsdom document/element
+    Object.defineProperty(document, 'fullscreenEnabled', { value: true, writable: true, configurable: true })
+    Object.defineProperty(document, 'fullscreenElement', { value: null, writable: true, configurable: true })
+    document.exitFullscreen = vi.fn().mockResolvedValue()
+    origRequestFullscreen = document.documentElement.requestFullscreen
+    document.documentElement.requestFullscreen = vi.fn().mockResolvedValue()
   })
 
   afterEach(() => {
-    vi.unstubAllGlobals()
+    delete document.fullscreenEnabled
+    delete document.fullscreenElement
+    delete document.exitFullscreen
+    document.documentElement.requestFullscreen = origRequestFullscreen
   })
 
   it('should provide fullscreen functionality', () => {
-    setupUseFullscreen()
-    const result = useFullscreen()
-    
+    const { result } = mountWithFullscreen()
+
     expect(result).toHaveProperty('isFullscreen')
     expect(result).toHaveProperty('isSupported')
     expect(result).toHaveProperty('toggleFullscreen')
@@ -45,35 +48,30 @@ describe('useFullscreen', () => {
   })
 
   it('should detect when fullscreen is supported', () => {
-    setupUseFullscreen()
-    const { isSupported } = useFullscreen()
-    expect(isSupported.value).toBe(true)
+    const { result } = mountWithFullscreen()
+    expect(result.isSupported.value).toBe(true)
   })
 
   it('should detect when fullscreen is not supported', () => {
-    const { mockDocument } = setupUseFullscreen()
-    mockDocument.fullscreenEnabled = false
-    mockDocument.webkitFullscreenEnabled = undefined
-    
-    const { isSupported } = useFullscreen()
-    expect(isSupported.value).toBe(false)
+    Object.defineProperty(document, 'fullscreenEnabled', { value: false, writable: true, configurable: true })
+
+    const { result } = mountWithFullscreen()
+    expect(result.isSupported.value).toBe(false)
   })
 
   it('should call requestFullscreen when toggling from non-fullscreen', async () => {
-    const { mockElement } = setupUseFullscreen()
-    const { toggleFullscreen } = useFullscreen()
-    
-    await toggleFullscreen()
-    expect(mockElement.requestFullscreen).toHaveBeenCalled()
+    const { result } = mountWithFullscreen()
+
+    await result.toggleFullscreen()
+    expect(document.documentElement.requestFullscreen).toHaveBeenCalled()
   })
 
   it('should handle errors gracefully', async () => {
-    const { mockElement } = setupUseFullscreen()
-    mockElement.requestFullscreen.mockRejectedValue(new Error('Test error'))
-    
-    const { toggleFullscreen } = useFullscreen()
-    
+    document.documentElement.requestFullscreen = vi.fn().mockRejectedValue(new Error('Test error'))
+
+    const { result } = mountWithFullscreen()
+
     // Should not throw
-    await expect(toggleFullscreen()).resolves.toBeUndefined()
+    await expect(result.toggleFullscreen()).resolves.toBeUndefined()
   })
 })

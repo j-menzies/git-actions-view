@@ -79,6 +79,10 @@ export function fetchGithubRepos() {
   return request('/api/v1/github/repos')
 }
 
+export function fetchGithubStatus() {
+  return request('/api/v1/github/status')
+}
+
 // Repos API
 export function fetchRepos() {
   return request('/api/v1/repos')

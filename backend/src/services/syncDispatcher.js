@@ -12,6 +12,7 @@ const MAX_ACTIVE_TRACKING_MS = 30 * 60 * 1000; // 30 minutes
 
 let lastDiscoveryPollTime = null;
 let lastActivePollTime = null;
+let prevActiveCount = 0;
 
 async function runDiscovery() {
   if (isSyncing) return;
@@ -36,9 +37,13 @@ async function runDiscovery() {
         }
       }
     }
-    console.log(
-      `Discovery sync complete. ${activeRuns.size} active run(s) tracked.`
-    );
+    const currentActive = activeRuns.size;
+    if (currentActive > 0 || prevActiveCount > 0) {
+      console.log(
+        `Discovery sync complete. ${currentActive} active run(s) tracked.`
+      );
+    }
+    prevActiveCount = currentActive;
   } catch (err) {
     console.error('Discovery sync error:', err.message);
   } finally {

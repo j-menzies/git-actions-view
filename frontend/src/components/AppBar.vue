@@ -8,6 +8,9 @@
     </v-app-bar-title>
 
     <template #append>
+      <!-- GitHub Status -->
+      <GitHubStatusIndicator />
+
       <!-- Fullscreen toggle -->
       <v-btn
         v-if="isFullscreenSupported"
@@ -163,6 +166,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { fetchMe, logout } from '@/services/api'
 import { useFilters } from '@/composables/useFilters'
 import { useFullscreen } from '@/composables/useFullscreen'
+import GitHubStatusIndicator from './GitHubStatusIndicator.vue'
 
 const theme = useTheme()
 const route = useRoute()
