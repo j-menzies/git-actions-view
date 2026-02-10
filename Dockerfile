@@ -8,6 +8,11 @@ RUN npm run build
 
 # Stage 2: Production backend + bundled frontend
 FROM node:22-alpine AS production
+
+LABEL org.opencontainers.image.source="https://github.com/j-menzies/git-actions-view"
+LABEL org.opencontainers.image.description="GitActionsView - Chronological GitHub Actions run log"
+LABEL org.opencontainers.image.licenses="MIT"
+
 WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --omit=dev

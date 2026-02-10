@@ -134,6 +134,30 @@ npm run test:watch    # Watch mode
 - [ ] PR description explains _what_ changed and _why_
 - [ ] Breaking changes are clearly documented
 
+## Releasing
+
+GitActionsView uses semantic versioning with git tags. When you're ready to publish a new release:
+
+1. **Ensure `main` is up to date** and all tests pass.
+
+2. **Tag the release** on `main`:
+   ```bash
+   git tag v1.2.0
+   git push origin v1.2.0
+   ```
+
+3. The CI pipeline will automatically:
+   - Run backend and frontend tests
+   - Build the Docker image
+   - Push to GitHub Container Registry (`ghcr.io/j-menzies/git-actions-view`)
+   - Tag the image with `1.2.0`, `1.2`, `1`, and `latest`
+
+### Versioning guidelines
+
+- **Patch** (`v1.0.1`): Bug fixes, dependency updates
+- **Minor** (`v1.1.0`): New features, backwards-compatible changes
+- **Major** (`v2.0.0`): Breaking changes (config format, API, database schema)
+
 ## Reporting issues
 
 Please open a GitHub issue with:

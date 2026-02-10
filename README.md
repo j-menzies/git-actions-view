@@ -32,21 +32,36 @@ GitActionsView uses a two-tier polling approach to balance freshness with API qu
 1. **Discovery poll** (default 60 s) fetches the latest 30 runs for each configured repository and upserts workflows, runs, and jobs into SQLite.
 2. **Active run poll** (default 10 s) re-checks only in-flight runs (queued, in_progress, waiting) until they complete.
 
+## Container images
+
+Pre-built Docker images are published to GitHub Container Registry on every release.
+
+```bash
+docker pull ghcr.io/j-menzies/git-actions-view:latest
+```
+
+| Tag | Description |
+|-----|-------------|
+| `latest` | Most recent release |
+| `1.2.3` | Specific version |
+| `1.2` | Latest patch in a minor series |
+| `1` | Latest minor/patch in a major series |
+
 ## Quick start
 
 ### Docker Compose (recommended)
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/your-org/gitactionsview.git
-cd gitactionsview
+# 1. Clone the repository (for the docker-compose.yml and .env.example)
+git clone https://github.com/j-menzies/git-actions-view.git
+cd git-actions-view
 
 # 2. Copy and edit the env file
 cp .env.example .env
 # At minimum, set GITHUB_REPOS and either GITHUB_ACCESS_TOKEN or OAuth credentials
 
-# 3. Build and run
-docker compose up --build -d
+# 3. Pull and run
+docker compose up -d
 
 # 4. Visit http://localhost:9000
 ```
