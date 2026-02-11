@@ -79,6 +79,10 @@ export function fetchGithubRepos() {
   return request('/api/v1/github/repos')
 }
 
+export function fetchGithubStatus() {
+  return request('/api/v1/github/status')
+}
+
 // Repos API
 export function fetchRepos() {
   return request('/api/v1/repos')
@@ -111,4 +115,13 @@ export function rebuildDatabase() {
   return request('/api/v1/admin/db/rebuild', {
     method: 'POST',
   })
+}
+
+export function fetchDbStats() {
+  return request('/api/v1/admin/db/stats')
+}
+
+// Repo stats API
+export function fetchRepoStats(id) {
+  return request(`/api/v1/repos/${id}/stats`)
 }

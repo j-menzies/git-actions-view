@@ -8,6 +8,20 @@
     </v-app-bar-title>
 
     <template #append>
+      <!-- GitHub Status -->
+      <GitHubStatusIndicator />
+
+      <!-- Fullscreen toggle -->
+      <v-btn
+        v-if="isFullscreenSupported"
+        icon
+        @click="toggleFullscreen"
+        :title="isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'"
+        data-testid="fullscreen-toggle"
+      >
+        <v-icon>{{ isFullscreen ? 'mdi-fullscreen-exit' : 'mdi-fullscreen' }}</v-icon>
+      </v-btn>
+
       <!-- Filter popover (only on Runs page) -->
       <v-menu
         v-if="isRunsPage"
@@ -151,6 +165,8 @@ import { useTheme } from 'vuetify'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchMe, logout } from '@/services/api'
 import { useFilters } from '@/composables/useFilters'
+import { useFullscreen } from '@/composables/useFullscreen'
+import GitHubStatusIndicator from './GitHubStatusIndicator.vue'
 
 const theme = useTheme()
 const route = useRoute()
@@ -159,6 +175,7 @@ const user = ref(null)
 const filterMenuOpen = ref(false)
 
 const { state: filterState, setFilter } = useFilters()
+const { isFullscreen, isSupported: isFullscreenSupported, toggleFullscreen } = useFullscreen()
 
 const isDark = computed(() => theme.global.current.value.dark)
 const isRunsPage = computed(() => route.name === 'Runs')

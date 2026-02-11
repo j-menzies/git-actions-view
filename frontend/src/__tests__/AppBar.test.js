@@ -2,16 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createTestVuetify } from './setup'
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { h, defineComponent } from 'vue'
+import { h, defineComponent, ref } from 'vue'
 import AppBar from '@/components/AppBar.vue'
 import { provideFilters } from '@/composables/useFilters'
 
 const mockFetchMe = vi.fn()
 const mockLogout = vi.fn()
+const mockUseFullscreen = vi.fn()
 
 vi.mock('@/services/api', () => ({
   fetchMe: (...args) => mockFetchMe(...args),
   logout: (...args) => mockLogout(...args),
+}))
+
+vi.mock('@/composables/useFullscreen', () => ({
+  useFullscreen: () => mockUseFullscreen(),
 }))
 
 function createTestRouter(initialRoute = '/runs') {
@@ -51,6 +56,12 @@ describe('AppBar', () => {
   beforeEach(() => {
     mockFetchMe.mockReset()
     mockLogout.mockReset()
+    // Reset to default mock values — must use real refs for template auto-unwrapping
+    mockUseFullscreen.mockReturnValue({
+      isFullscreen: ref(false),
+      isSupported: ref(true),
+      toggleFullscreen: vi.fn(),
+    })
   })
 
   it('displays title', async () => {
@@ -122,5 +133,56 @@ describe('AppBar', () => {
     await flushPromises()
     const filterBtn = wrapper.find('[data-testid="filter-menu-activator"]')
     expect(filterBtn.exists()).toBe(false)
+  })
+
+  it('shows fullscreen button when fullscreen is supported', async () => {
+    mockFetchMe.mockResolvedValue({ login: 'dev' })
+    const wrapper = await mountAppBar()
+    await flushPromises()
+    const fullscreenBtn = wrapper.find('[data-testid="fullscreen-toggle"]')
+    expect(fullscreenBtn.exists()).toBe(true)
+  })
+
+  it('hides fullscreen button when fullscreen is not supported', async () => {
+    // Override mock for this specific test — must use real refs
+    mockUseFullscreen.mockReturnValueOnce({
+      isFullscreen: ref(false),
+      isSupported: ref(false),
+      toggleFullscreen: vi.fn(),
+    })
+    mockFetchMe.mockResolvedValue({ login: 'dev' })
+    const wrapper = await mountAppBar()
+    await flushPromises()
+    const fullscreenBtn = wrapper.find('[data-testid="fullscreen-toggle"]')
+    expect(fullscreenBtn.exists()).toBe(false)
+  })
+
+  it('shows correct fullscreen icon based on state', async () => {
+    mockFetchMe.mockResolvedValue({ login: 'dev' })
+    
+    // Test not in fullscreen - use default mock
+    const wrapper = await mountAppBar()
+    await flushPromises()
+    const fullscreenBtn = wrapper.find('[data-testid="fullscreen-toggle"]')
+    expect(fullscreenBtn.exists()).toBe(true)
+    // Check for the presence of fullscreen icon class
+    expect(fullscreenBtn.html()).toMatch(/mdi-fullscreen(?![a-z])/)
+  })
+
+  it('calls toggleFullscreen when fullscreen button is clicked', async () => {
+    const mockToggleFullscreen = vi.fn()
+    mockUseFullscreen.mockReturnValue({
+      isFullscreen: ref(false),
+      isSupported: ref(true),
+      toggleFullscreen: mockToggleFullscreen,
+    })
+    mockFetchMe.mockResolvedValue({ login: 'dev' })
+    
+    const wrapper = await mountAppBar()
+    await flushPromises()
+    const fullscreenBtn = wrapper.find('[data-testid="fullscreen-toggle"]')
+    
+    await fullscreenBtn.trigger('click')
+    expect(mockToggleFullscreen).toHaveBeenCalled()
   })
 })

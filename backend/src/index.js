@@ -38,6 +38,7 @@ app.use(require('./routes/settings'));
 app.use(require('./routes/repos'));
 app.use(require('./routes/github'));
 app.use(require('./routes/admin'));
+app.use(require('./routes/sse'));
 
 // Serve frontend static files
 const publicDir = path.join(__dirname, '..', 'public');

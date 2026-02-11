@@ -1,7 +1,11 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const { ensureAuthenticated } = require('../auth/middleware');
+const { getDb } = require('../db/database');
 const reposService = require('../services/reposService');
 const syncDispatcher = require('../services/syncDispatcher');
+const config = require('../config');
 
 const router = express.Router();
 
@@ -62,6 +66,60 @@ router.delete('/api/v1/repos/:id', ensureAuthenticated, (req, res) => {
     return res.status(404).json({ error: 'Repository not found' });
   }
   res.json({ success: true });
+});
+
+/**
+ * GET /api/v1/repos/:id/stats — per-repo metrics.
+ */
+router.get('/api/v1/repos/:id/stats', ensureAuthenticated, (req, res) => {
+  const db = getDb();
+  const id = parseInt(req.params.id, 10);
+  const repo = reposService.getAllRepos().find(r => r.id === id);
+  if (!repo) {
+    return res.status(404).json({ error: 'Repository not found' });
+  }
+
+  const { owner, name } = repo;
+
+  try {
+    const runCount = db.prepare(
+      'SELECT COUNT(*) as cnt FROM workflow_runs WHERE owner_name = ? AND repo_name = ?'
+    ).get(owner, name).cnt;
+
+    const workflowCount = db.prepare(
+      'SELECT COUNT(*) as cnt FROM workflows WHERE owner_name = ? AND repo_name = ?'
+    ).get(owner, name).cnt;
+
+    const jobCount = db.prepare(
+      `SELECT COUNT(*) as cnt FROM workflow_jobs
+       WHERE run_id IN (SELECT id FROM workflow_runs WHERE owner_name = ? AND repo_name = ?)`
+    ).get(owner, name).cnt;
+
+    const latestRun = db.prepare(
+      'SELECT created_at FROM workflow_runs WHERE owner_name = ? AND repo_name = ? ORDER BY created_at DESC LIMIT 1'
+    ).get(owner, name);
+
+    // Estimate data size based on proportion of runs
+    const totalRuns = db.prepare('SELECT COUNT(*) as cnt FROM workflow_runs').get().cnt;
+    let estimatedSizeBytes = 0;
+    try {
+      const stat = fs.statSync(path.resolve(config.dbPath));
+      estimatedSizeBytes = totalRuns > 0 ? Math.round((runCount / totalRuns) * stat.size) : 0;
+    } catch {
+      // ignore
+    }
+
+    res.json({
+      runCount,
+      workflowCount,
+      jobCount,
+      latestRun: latestRun?.created_at || null,
+      estimatedSizeBytes,
+    });
+  } catch (err) {
+    console.error('Repo stats error:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve repo stats' });
+  }
 });
 
 module.exports = router;
