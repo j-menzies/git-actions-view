@@ -5,6 +5,7 @@ services:
     ports:
       - "9000:9000"
     environment:
+      - BASE_URL=${BASE_URL:-http://localhost:9000}
       - GITHUB_REPOS=${GITHUB_REPOS}
       - GITHUB_ACCESS_TOKEN=${GITHUB_ACCESS_TOKEN:-}
       - GITHUB_OAUTH2_CLIENT_ID=${GITHUB_OAUTH2_CLIENT_ID:-}

@@ -18,9 +18,10 @@ if (config.trustProxy) {
 // Middleware
 app.use(cookieParser());
 app.use(express.json());
+const sessionStore = new SqliteStore({ client: getDb(), expired: { clear: true, intervalMs: 900000 } });
 app.use(
   session({
-    store: new SqliteStore({ client: getDb(), expired: { clear: true, intervalMs: 900000 } }),
+    store: sessionStore,
     secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
@@ -81,16 +82,14 @@ const server = app.listen(config.port, () => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+function shutdown() {
   console.log('Shutting down...');
   syncDispatcher.stop();
-  closeDb();
-  server.close();
-});
+  server.close(() => {
+    closeDb();
+    process.exit(0);
+  });
+}
 
-process.on('SIGINT', () => {
-  console.log('Shutting down...');
-  syncDispatcher.stop();
-  closeDb();
-  server.close();
-});
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

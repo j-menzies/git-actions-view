@@ -5,6 +5,7 @@ const config = {
   githubOAuth2ClientId: process.env.GITHUB_OAUTH2_CLIENT_ID || '',
   githubOAuth2ClientSecret: process.env.GITHUB_OAUTH2_CLIENT_SECRET || '',
   basicAuthFilePath: process.env.BASIC_AUTH_USER_DETAILS_FILE_PATH || '',
+  baseUrl: process.env.BASE_URL || 'http://localhost:9000',
   sessionSecret: process.env.SESSION_SECRET || 'change-me-in-production',
   cookieSameSite: process.env.COOKIE_SAME_SITE || 'lax',
   trustProxy: process.env.TRUST_PROXY === 'true',
