@@ -1,5 +1,5 @@
 <template>
-  <v-app-bar flat border>
+  <v-app-bar flat border :density="isFullscreen ? 'compact' : 'default'">
     <v-app-bar-title>
       <router-link :to="{ name: 'Runs' }" class="app-title-link">
         <v-icon class="mr-1">mdi-github</v-icon>
