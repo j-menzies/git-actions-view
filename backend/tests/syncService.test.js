@@ -28,6 +28,7 @@ describe('syncService', () => {
 
     githubApi = require('../src/services/githubApi');
     syncService = require('../src/services/syncService');
+    syncService._resetCache();
 
     // Reset mock call history
     jest.clearAllMocks();
@@ -305,5 +306,93 @@ describe('syncService', () => {
 
     const isCompleted = await syncService.syncActiveRun('org', 'repo', 100, 'token');
     expect(isCompleted).toBe(false);
+  });
+
+  test('syncRepoRuns skips job fetch for completed runs that already have jobs', async () => {
+    // Pre-populate a completed run with jobs in the DB
+    syncService.upsertWorkflow({ id: 1, name: 'CI' }, 'org', 'repo');
+    syncService.upsertRun({
+      id: 100, workflow_id: 1, run_number: 1, status: 'completed', conclusion: 'success',
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:05:00Z',
+    }, 'org', 'repo', 'CI');
+    syncService.upsertJob({
+      id: 200, name: 'build', status: 'completed', conclusion: 'success',
+    }, 100);
+
+    githubApi.listWorkflows.mockResolvedValue([{ id: 1, name: 'CI' }]);
+    githubApi.listWorkflowRuns.mockResolvedValue({
+      workflow_runs: [{
+        id: 100, workflow_id: 1, run_number: 1, status: 'completed', conclusion: 'success',
+        created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:05:00Z',
+      }],
+    });
+    githubApi.listRunJobs.mockResolvedValue([]);
+
+    await syncService.syncRepoRuns('org', 'repo', 'token');
+
+    // listRunJobs should NOT have been called since the run already has jobs
+    expect(githubApi.listRunJobs).not.toHaveBeenCalled();
+  });
+
+  test('syncRepoRuns fetches jobs for completed runs without existing jobs', async () => {
+    githubApi.listWorkflows.mockResolvedValue([{ id: 1, name: 'CI' }]);
+    githubApi.listWorkflowRuns.mockResolvedValue({
+      workflow_runs: [{
+        id: 100, workflow_id: 1, run_number: 1, status: 'completed', conclusion: 'success',
+        created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:05:00Z',
+      }],
+    });
+    githubApi.listRunJobs.mockResolvedValue([
+      { id: 200, name: 'build', status: 'completed', conclusion: 'success' },
+    ]);
+
+    await syncService.syncRepoRuns('org', 'repo', 'token');
+
+    // listRunJobs should be called since there are no jobs in DB yet
+    expect(githubApi.listRunJobs).toHaveBeenCalledWith('org', 'repo', 100, 'token');
+  });
+
+  test('syncRepoRuns always fetches jobs for active runs', async () => {
+    // Pre-populate an active run with existing jobs
+    syncService.upsertWorkflow({ id: 1, name: 'CI' }, 'org', 'repo');
+    syncService.upsertRun({
+      id: 100, workflow_id: 1, run_number: 1, status: 'in_progress', conclusion: null,
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:01:00Z',
+    }, 'org', 'repo', 'CI');
+    syncService.upsertJob({
+      id: 200, name: 'build', status: 'in_progress', conclusion: null,
+    }, 100);
+
+    githubApi.listWorkflows.mockResolvedValue([{ id: 1, name: 'CI' }]);
+    githubApi.listWorkflowRuns.mockResolvedValue({
+      workflow_runs: [{
+        id: 100, workflow_id: 1, run_number: 1, status: 'in_progress', conclusion: null,
+        created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:01:00Z',
+      }],
+    });
+    githubApi.listRunJobs.mockResolvedValue([
+      { id: 200, name: 'build', status: 'in_progress', conclusion: null },
+    ]);
+
+    await syncService.syncRepoRuns('org', 'repo', 'token');
+
+    // Should always fetch jobs for active runs regardless of existing jobs
+    expect(githubApi.listRunJobs).toHaveBeenCalledWith('org', 'repo', 100, 'token');
+  });
+
+  test('syncRepoRuns caches workflows across calls', async () => {
+    githubApi.listWorkflows.mockResolvedValue([{ id: 1, name: 'CI' }]);
+    githubApi.listWorkflowRuns.mockResolvedValue({ workflow_runs: [] });
+
+    // First call should fetch workflows
+    await syncService.syncRepoRuns('org', 'repo', 'token');
+    expect(githubApi.listWorkflows).toHaveBeenCalledTimes(1);
+
+    jest.clearAllMocks();
+
+    // Second call should use cache
+    githubApi.listWorkflowRuns.mockResolvedValue({ workflow_runs: [] });
+    await syncService.syncRepoRuns('org', 'repo', 'token');
+    expect(githubApi.listWorkflows).not.toHaveBeenCalled();
   });
 });

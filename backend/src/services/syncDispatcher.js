@@ -2,6 +2,7 @@ const config = require('../config');
 const { syncRepoRuns, syncActiveRun } = require('./syncService');
 const reposService = require('./reposService');
 const { broadcast } = require('./sseManager');
+const rateLimitTracker = require('./rateLimitTracker');
 
 // Set of active (in-flight) runs: { id, owner, repo, trackedSince }
 const activeRuns = new Map();
@@ -16,6 +17,13 @@ let prevActiveCount = 0;
 
 async function runDiscovery() {
   if (isSyncing) return;
+  if (rateLimitTracker.shouldPause()) {
+    const status = rateLimitTracker.getStatus();
+    const resetDate = status.resetAt ? new Date(status.resetAt * 1000).toISOString() : 'unknown';
+    console.log(`Discovery skipped — rate limited (${status.remaining}/${status.limit}). Resumes at ${resetDate}`);
+    broadcast('sync:rateLimited', { paused: true, ...status });
+    return;
+  }
   if (!config.githubAccessToken && !config.isOAuth2Enabled) {
     return; // No token available for background sync
   }
@@ -55,6 +63,7 @@ async function runDiscovery() {
 
 async function pollActiveRuns() {
   if (activeRuns.size === 0) return;
+  if (rateLimitTracker.shouldPause()) return;
   const token = config.githubAccessToken;
 
   const entries = Array.from(activeRuns.entries());
@@ -122,6 +131,10 @@ function restart() {
  * @param {string} name
  */
 async function syncSingleRepo(owner, name) {
+  if (rateLimitTracker.shouldPause()) {
+    console.warn(`Single repo sync skipped for ${owner}/${name} — rate limited`);
+    return;
+  }
   if (!config.githubAccessToken && !config.isOAuth2Enabled) {
     return;
   }
@@ -145,7 +158,7 @@ async function syncSingleRepo(owner, name) {
 }
 
 function getLastPollTimes() {
-  return { discovery: lastDiscoveryPollTime, active: lastActivePollTime };
+  return { discovery: lastDiscoveryPollTime, active: lastActivePollTime, rateLimit: rateLimitTracker.getStatus() };
 }
 
 module.exports = { start, stop, restart, syncSingleRepo, getLastPollTimes };

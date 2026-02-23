@@ -1,15 +1,39 @@
 const axios = require('axios');
 const config = require('../config');
+const rateLimitTracker = require('./rateLimitTracker');
 
 function createClient(accessToken) {
   const token = accessToken || config.githubAccessToken;
-  return axios.create({
+  const client = axios.create({
     baseURL: config.domainName,
     headers: token
       ? { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
       : { Accept: 'application/vnd.github.v3+json' },
     timeout: 30000,
   });
+
+  client.interceptors.response.use(
+    (response) => {
+      rateLimitTracker.update(response.headers);
+      return response;
+    },
+    (error) => {
+      if (error.response?.headers) {
+        rateLimitTracker.update(error.response.headers);
+      }
+      if (error.response?.status === 403 &&
+          error.response?.headers?.['x-ratelimit-remaining'] === '0') {
+        const resetAt = error.response.headers['x-ratelimit-reset'];
+        const resetDate = new Date(parseInt(resetAt, 10) * 1000);
+        const err = new Error(`GitHub API rate limit exceeded. Resets at ${resetDate.toISOString()}`);
+        err.isRateLimit = true;
+        throw err;
+      }
+      throw error;
+    }
+  );
+
+  return client;
 }
 
 async function listWorkflows(owner, repo, accessToken) {

@@ -89,12 +89,26 @@ function upsertJob(job, runId) {
   });
 }
 
+// In-memory workflow cache to avoid re-fetching every cycle
+const workflowCache = new Map();
+const WORKFLOW_CACHE_CYCLES = 10;
+
 async function syncRepoRuns(owner, repo, accessToken) {
   try {
-    // Fetch workflows
-    const workflows = await githubApi.listWorkflows(owner, repo, accessToken);
-    for (const wf of workflows) {
-      upsertWorkflow(wf, owner, repo);
+    const db = getDb();
+    const cacheKey = `${owner}/${repo}`;
+    let workflows;
+    const cached = workflowCache.get(cacheKey);
+
+    if (cached && cached.cyclesSince < WORKFLOW_CACHE_CYCLES) {
+      workflows = cached.workflows;
+      cached.cyclesSince++;
+    } else {
+      workflows = await githubApi.listWorkflows(owner, repo, accessToken);
+      for (const wf of workflows) {
+        upsertWorkflow(wf, owner, repo);
+      }
+      workflowCache.set(cacheKey, { workflows, cyclesSince: 0 });
     }
 
     // Build a name lookup for workflows
@@ -117,15 +131,40 @@ async function syncRepoRuns(owner, repo, accessToken) {
       }
     }
 
-    // Fetch jobs for new/recent runs
-    for (const run of runs.slice(0, 10)) {
-      try {
-        const jobs = await githubApi.listRunJobs(owner, repo, run.id, accessToken);
-        for (const job of jobs) {
-          upsertJob(job, run.id);
+    // Fetch jobs only for runs that need them
+    const jobCountStmt = db.prepare(
+      'SELECT COUNT(*) as cnt FROM workflow_jobs WHERE run_id = ? AND conclusion IS NOT NULL'
+    );
+
+    for (const run of runs) {
+      const isActive = ['queued', 'in_progress', 'waiting'].includes(run.status);
+
+      if (isActive) {
+        // Always fetch jobs for active runs
+        try {
+          const jobs = await githubApi.listRunJobs(owner, repo, run.id, accessToken);
+          for (const job of jobs) {
+            upsertJob(job, run.id);
+          }
+        } catch (err) {
+          console.error(`Failed to fetch jobs for run ${run.id}: ${err.message}`);
         }
-      } catch (err) {
-        console.error(`Failed to fetch jobs for run ${run.id}: ${err.message}`);
+        continue;
+      }
+
+      // For completed runs, skip if we already have jobs with conclusions
+      if (run.status === 'completed') {
+        const existing = jobCountStmt.get(run.id);
+        if (existing.cnt > 0) continue;
+
+        try {
+          const jobs = await githubApi.listRunJobs(owner, repo, run.id, accessToken);
+          for (const job of jobs) {
+            upsertJob(job, run.id);
+          }
+        } catch (err) {
+          console.error(`Failed to fetch jobs for run ${run.id}: ${err.message}`);
+        }
       }
     }
 
@@ -171,4 +210,8 @@ async function syncActiveRun(owner, repo, runId, accessToken) {
   }
 }
 
-module.exports = { upsertWorkflow, upsertRun, upsertJob, syncRepoRuns, syncActiveRun };
+function _resetCache() {
+  workflowCache.clear();
+}
+
+module.exports = { upsertWorkflow, upsertRun, upsertJob, syncRepoRuns, syncActiveRun, _resetCache };

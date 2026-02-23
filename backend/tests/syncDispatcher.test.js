@@ -1,5 +1,6 @@
 jest.mock('../src/services/syncService');
 jest.mock('../src/services/reposService');
+jest.mock('../src/services/rateLimitTracker');
 
 describe('syncDispatcher', () => {
   const originalEnv = process.env;
@@ -33,6 +34,8 @@ describe('syncDispatcher', () => {
   });
 
   test('start() calls syncRepoRuns immediately', () => {
+    const rateLimitTracker = require('../src/services/rateLimitTracker');
+    rateLimitTracker.shouldPause.mockReturnValue(false);
     const reposService = require('../src/services/reposService');
     reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
     const syncService = require('../src/services/syncService');
@@ -51,6 +54,8 @@ describe('syncDispatcher', () => {
     process.env.DISCOVERY_POLL_SECONDS = '45';
     process.env.ACTIVE_POLL_SECONDS = '15';
     jest.resetModules();
+    const rateLimitTracker = require('../src/services/rateLimitTracker');
+    rateLimitTracker.shouldPause.mockReturnValue(false);
     const reposService = require('../src/services/reposService');
     reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
     const syncService = require('../src/services/syncService');
@@ -68,6 +73,8 @@ describe('syncDispatcher', () => {
   });
 
   test('stop() does not throw', () => {
+    const rateLimitTracker = require('../src/services/rateLimitTracker');
+    rateLimitTracker.shouldPause.mockReturnValue(false);
     const reposService = require('../src/services/reposService');
     reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
     const syncService = require('../src/services/syncService');
@@ -84,6 +91,8 @@ describe('syncDispatcher', () => {
     delete process.env.GITHUB_ACCESS_TOKEN;
     delete process.env.GITHUB_OAUTH2_CLIENT_ID;
     jest.resetModules();
+    const rateLimitTracker = require('../src/services/rateLimitTracker');
+    rateLimitTracker.shouldPause.mockReturnValue(false);
     const reposService = require('../src/services/reposService');
     reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
     const syncService = require('../src/services/syncService');
@@ -99,6 +108,8 @@ describe('syncDispatcher', () => {
   });
 
   test('restart() stops and starts again', () => {
+    const rateLimitTracker = require('../src/services/rateLimitTracker');
+    rateLimitTracker.shouldPause.mockReturnValue(false);
     const reposService = require('../src/services/reposService');
     reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
     const syncService = require('../src/services/syncService');
@@ -113,6 +124,8 @@ describe('syncDispatcher', () => {
   });
 
   test('pollActiveRuns removes stale runs after 30 minutes', async () => {
+    const rateLimitTracker = require('../src/services/rateLimitTracker');
+    rateLimitTracker.shouldPause.mockReturnValue(false);
     const reposService = require('../src/services/reposService');
     reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
     const syncService = require('../src/services/syncService');
@@ -144,6 +157,8 @@ describe('syncDispatcher', () => {
   });
 
   test('syncSingleRepo() calls syncRepoRuns for a specific repo', async () => {
+    const rateLimitTracker = require('../src/services/rateLimitTracker');
+    rateLimitTracker.shouldPause.mockReturnValue(false);
     const reposService = require('../src/services/reposService');
     reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
     const syncService = require('../src/services/syncService');
@@ -154,6 +169,66 @@ describe('syncDispatcher', () => {
     await dispatcher.syncSingleRepo('new-org', 'new-repo');
 
     expect(syncService.syncRepoRuns).toHaveBeenCalledWith('new-org', 'new-repo', 'test-token');
+    consoleSpy.mockRestore();
+    dispatcher.stop();
+  });
+
+  test('discovery skips when rate limited', () => {
+    const rateLimitTracker = require('../src/services/rateLimitTracker');
+    rateLimitTracker.shouldPause.mockReturnValue(true);
+    rateLimitTracker.getStatus.mockReturnValue({
+      remaining: 10, limit: 5000, resetAt: 1700000000, isPaused: true,
+    });
+    const reposService = require('../src/services/reposService');
+    reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
+    const syncService = require('../src/services/syncService');
+    syncService.syncRepoRuns.mockResolvedValue([]);
+
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    const dispatcher = require('../src/services/syncDispatcher');
+    dispatcher.start();
+
+    expect(syncService.syncRepoRuns).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('rate limited'));
+    consoleSpy.mockRestore();
+    dispatcher.stop();
+  });
+
+  test('syncSingleRepo skips when rate limited', async () => {
+    const rateLimitTracker = require('../src/services/rateLimitTracker');
+    rateLimitTracker.shouldPause.mockReturnValue(true);
+    const syncService = require('../src/services/syncService');
+    syncService.syncRepoRuns.mockResolvedValue([]);
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const dispatcher = require('../src/services/syncDispatcher');
+    await dispatcher.syncSingleRepo('org', 'repo');
+
+    expect(syncService.syncRepoRuns).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('rate limited'));
+    warnSpy.mockRestore();
+    dispatcher.stop();
+  });
+
+  test('getLastPollTimes includes rateLimit status', () => {
+    const rateLimitTracker = require('../src/services/rateLimitTracker');
+    rateLimitTracker.shouldPause.mockReturnValue(false);
+    rateLimitTracker.getStatus.mockReturnValue({
+      remaining: 4500, limit: 5000, resetAt: 1700000000, isPaused: false,
+    });
+    const reposService = require('../src/services/reposService');
+    reposService.getVisibleRepos.mockReturnValue([{ owner: 'org', name: 'repo' }]);
+    const syncService = require('../src/services/syncService');
+    syncService.syncRepoRuns.mockResolvedValue([]);
+
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    const dispatcher = require('../src/services/syncDispatcher');
+    dispatcher.start();
+
+    const pollTimes = dispatcher.getLastPollTimes();
+    expect(pollTimes.rateLimit).toEqual({
+      remaining: 4500, limit: 5000, resetAt: 1700000000, isPaused: false,
+    });
     consoleSpy.mockRestore();
     dispatcher.stop();
   });

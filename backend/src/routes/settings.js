@@ -17,6 +17,7 @@ router.get('/api/v1/settings', ensureAuthenticated, (req, res) => {
     activePollSeconds: intervals.activePollSeconds,
     lastDiscoveryPoll: pollTimes.discovery,
     lastActivePoll: pollTimes.active,
+    rateLimit: pollTimes.rateLimit,
   });
 });
 
