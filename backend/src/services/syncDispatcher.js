@@ -33,11 +33,21 @@ async function runDiscovery() {
 
   try {
     const repos = reposService.getVisibleRepos();
+    let successCount = 0;
+    let failCount = 0;
+
     for (const repo of repos) {
       const repoFullName = `${repo.owner}/${repo.name}`;
       broadcast('sync:start', { repo: repoFullName, type: 'discovery' });
       const newActive = await syncRepoRuns(repo.owner, repo.name, token);
       broadcast('sync:complete', { repo: repoFullName, type: 'discovery' });
+
+      if (newActive === null) {
+        failCount++;
+        continue;
+      }
+
+      successCount++;
       for (const run of newActive) {
         const key = `${run.owner}/${run.repo}/${run.id}`;
         if (!activeRuns.has(key)) {
@@ -45,19 +55,28 @@ async function runDiscovery() {
         }
       }
     }
+
     const currentActive = activeRuns.size;
-    if (currentActive > 0 || prevActiveCount > 0) {
+    if (failCount > 0) {
+      console.warn(
+        `Discovery sync: ${successCount}/${repos.length} repo(s) succeeded, ${failCount} failed. ${currentActive} active run(s) tracked.`
+      );
+    } else {
       console.log(
-        `Discovery sync complete. ${currentActive} active run(s) tracked.`
+        `Discovery sync complete for ${repos.length} repo(s). ${currentActive} active run(s) tracked.`
       );
     }
     prevActiveCount = currentActive;
+
+    // Only update last sync time if at least one repo succeeded
+    if (successCount > 0) {
+      lastDiscoveryPollTime = new Date().toISOString();
+      broadcast('sync:poll', { lastPollTime: lastDiscoveryPollTime, type: 'discovery', repoCount: repos.length });
+    }
   } catch (err) {
     console.error('Discovery sync error:', err.message);
   } finally {
     isSyncing = false;
-    lastDiscoveryPollTime = new Date().toISOString();
-    broadcast('sync:poll', { lastPollTime: lastDiscoveryPollTime, type: 'discovery' });
   }
 }
 

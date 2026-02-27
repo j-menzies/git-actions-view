@@ -231,7 +231,7 @@ describe('syncService', () => {
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
     const active = await syncService.syncRepoRuns('org', 'repo', 'token');
 
-    expect(active).toEqual([]);
+    expect(active).toBeNull();
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });

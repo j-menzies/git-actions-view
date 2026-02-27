@@ -8,6 +8,7 @@ export function provideSyncStatus() {
     syncingRepo: null,
     lastDiscoveryPoll: null,
     lastActivePoll: null,
+    repoCount: null,
   })
 
   let eventSource = null
@@ -39,6 +40,7 @@ export function provideSyncStatus() {
       const data = JSON.parse(e.data)
       if (data.type === 'discovery') {
         state.lastDiscoveryPoll = data.lastPollTime
+        if (data.repoCount != null) state.repoCount = data.repoCount
       } else if (data.type === 'active') {
         state.lastActivePoll = data.lastPollTime
       }
@@ -62,6 +64,7 @@ const defaultState = reactive({
   syncingRepo: null,
   lastDiscoveryPoll: null,
   lastActivePoll: null,
+  repoCount: null,
 })
 
 export function useSyncStatus() {

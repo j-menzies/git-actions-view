@@ -1,11 +1,22 @@
 <template>
-  <v-app-bar flat border :density="isFullscreen ? 'compact' : 'default'">
+  <v-app-bar flat border density="compact">
     <v-app-bar-title>
       <router-link :to="{ name: 'Runs' }" class="app-title-link">
         <v-icon class="mr-1">mdi-github</v-icon>
         GitActionsView
       </router-link>
     </v-app-bar-title>
+
+    <div class="sync-status-centered d-flex align-center text-caption text-medium-emphasis">
+      <v-icon
+        size="8"
+        :color="syncStatus.connected ? 'success' : 'error'"
+        class="mr-1"
+      >mdi-circle</v-icon>
+      <span>{{ lastSyncLabel }}</span>
+      <span v-if="syncStatus.repoCount != null" class="mx-1">|</span>
+      <span v-if="syncStatus.repoCount != null">{{ syncStatus.repoCount }} repos</span>
+    </div>
 
     <template #append>
       <!-- GitHub Status -->
@@ -160,12 +171,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useTheme } from 'vuetify'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchMe, logout } from '@/services/api'
 import { useFilters } from '@/composables/useFilters'
 import { useFullscreen } from '@/composables/useFullscreen'
+import { useSyncStatus } from '@/composables/useSyncStatus'
 import GitHubStatusIndicator from './GitHubStatusIndicator.vue'
 
 const theme = useTheme()
@@ -176,8 +188,24 @@ const filterMenuOpen = ref(false)
 
 const { state: filterState, setFilter } = useFilters()
 const { isFullscreen, isSupported: isFullscreenSupported, toggleFullscreen } = useFullscreen()
+const syncStatus = useSyncStatus()
 
 const isDark = computed(() => theme.global.current.value.dark)
+
+const now = ref(new Date())
+let clockTimer = null
+
+const lastSyncLabel = computed(() => {
+  const poll = syncStatus.lastDiscoveryPoll
+  if (!poll) return 'Waiting for sync...'
+  const pollDate = new Date(poll)
+  const diffSec = Math.round((now.value - pollDate) / 1000)
+  if (diffSec < 5) return 'Just now'
+  if (diffSec < 60) return `${diffSec}s ago`
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin}m ago`
+  return pollDate.toLocaleTimeString()
+})
 const isRunsPage = computed(() => route.name === 'Runs')
 
 const localFilters = reactive({
@@ -238,6 +266,11 @@ onMounted(async () => {
   } catch {
     // Not logged in
   }
+  clockTimer = setInterval(() => { now.value = new Date() }, 5000)
+})
+
+onUnmounted(() => {
+  if (clockTimer) clearInterval(clockTimer)
 })
 </script>
 
@@ -248,5 +281,13 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   cursor: pointer;
+}
+
+.sync-status-centered {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
 }
 </style>

@@ -94,21 +94,24 @@ const workflowCache = new Map();
 const WORKFLOW_CACHE_CYCLES = 10;
 
 async function syncRepoRuns(owner, repo, accessToken) {
+  const repoFullName = `${owner}/${repo}`;
   try {
     const db = getDb();
-    const cacheKey = `${owner}/${repo}`;
+    const cacheKey = repoFullName;
     let workflows;
     const cached = workflowCache.get(cacheKey);
 
     if (cached && cached.cyclesSince < WORKFLOW_CACHE_CYCLES) {
       workflows = cached.workflows;
       cached.cyclesSince++;
+      console.log(`[sync] ${repoFullName}: using cached workflows (${workflows.length}), cycle ${cached.cyclesSince}/${WORKFLOW_CACHE_CYCLES}`);
     } else {
       workflows = await githubApi.listWorkflows(owner, repo, accessToken);
       for (const wf of workflows) {
         upsertWorkflow(wf, owner, repo);
       }
       workflowCache.set(cacheKey, { workflows, cyclesSince: 0 });
+      console.log(`[sync] ${repoFullName}: fetched ${workflows.length} workflow(s) from API`);
     }
 
     // Build a name lookup for workflows
@@ -136,6 +139,9 @@ async function syncRepoRuns(owner, repo, accessToken) {
       'SELECT COUNT(*) as cnt FROM workflow_jobs WHERE run_id = ? AND conclusion IS NOT NULL'
     );
 
+    let jobsFetched = 0;
+    let jobsSkipped = 0;
+
     for (const run of runs) {
       const isActive = ['queued', 'in_progress', 'waiting'].includes(run.status);
 
@@ -146,8 +152,9 @@ async function syncRepoRuns(owner, repo, accessToken) {
           for (const job of jobs) {
             upsertJob(job, run.id);
           }
+          jobsFetched++;
         } catch (err) {
-          console.error(`Failed to fetch jobs for run ${run.id}: ${err.message}`);
+          console.error(`[sync] ${repoFullName}: failed to fetch jobs for active run ${run.id}: ${err.message}`);
         }
         continue;
       }
@@ -155,23 +162,28 @@ async function syncRepoRuns(owner, repo, accessToken) {
       // For completed runs, skip if we already have jobs with conclusions
       if (run.status === 'completed') {
         const existing = jobCountStmt.get(run.id);
-        if (existing.cnt > 0) continue;
+        if (existing.cnt > 0) {
+          jobsSkipped++;
+          continue;
+        }
 
         try {
           const jobs = await githubApi.listRunJobs(owner, repo, run.id, accessToken);
           for (const job of jobs) {
             upsertJob(job, run.id);
           }
+          jobsFetched++;
         } catch (err) {
-          console.error(`Failed to fetch jobs for run ${run.id}: ${err.message}`);
+          console.error(`[sync] ${repoFullName}: failed to fetch jobs for run ${run.id}: ${err.message}`);
         }
       }
     }
 
+    console.log(`[sync] ${repoFullName}: ${runs.length} runs, ${activeRuns.length} active, jobs fetched=${jobsFetched} skipped=${jobsSkipped}`);
     return activeRuns;
   } catch (err) {
-    console.error(`Failed to sync ${owner}/${repo}: ${err.message}`);
-    return [];
+    console.error(`[sync] ${repoFullName}: FAILED — ${err.message}`);
+    return null;
   }
 }
 
