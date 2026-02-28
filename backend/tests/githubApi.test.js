@@ -17,7 +17,10 @@ describe('githubApi', () => {
     mockInterceptorUse = jest.fn();
     axios.create.mockReturnValue({
       get: mockGet,
-      interceptors: { response: { use: mockInterceptorUse } },
+      interceptors: {
+        request: { use: jest.fn() },
+        response: { use: mockInterceptorUse },
+      },
     });
     rateLimitTracker = require('../src/services/rateLimitTracker');
     rateLimitTracker.update.mockClear();

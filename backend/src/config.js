@@ -12,6 +12,12 @@ const config = {
   discoveryPollSeconds: parseInt(process.env.DISCOVERY_POLL_SECONDS || '60', 10),
   activePollSeconds: parseInt(process.env.ACTIVE_POLL_SECONDS || '10', 10),
   dbPath: process.env.DB_PATH || './data/gitactionsview.db',
+  githubWebhookSecret: process.env.GITHUB_WEBHOOK_SECRET || '',
+  smeeUrl: process.env.SMEE_URL || '',
+
+  get isWebhooksEnabled() {
+    return !!this.githubWebhookSecret;
+  },
 
   get isOAuth2Enabled() {
     return !!this.githubOAuth2ClientId && !!this.githubOAuth2ClientSecret;

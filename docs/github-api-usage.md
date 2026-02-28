@@ -56,6 +56,8 @@ flowchart TB
 1. **Workflow caching**: `listWorkflows` results are cached in memory for 10 discovery cycles (~10 min). Saves ~0.9 calls/repo/cycle.
 2. **Job skip for completed runs**: `listRunJobs` is skipped for completed runs that already have jobs with conclusions in the database. This is the biggest optimization — in steady state, most of the 30 runs per repo are completed with existing jobs.
 3. **Rate limit tracking**: Response headers (`x-ratelimit-remaining`) are monitored on every API call. All sync pauses when remaining drops below 100, and auto-resumes after the rate limit window resets.
+4. **ETag conditional requests**: All API calls include `If-None-Match` headers with cached ETags. When data hasn't changed, GitHub returns `304 Not Modified` — which does **not** count against the rate limit. In steady state, most discovery calls return 304, reducing effective rate consumption to near-zero.
+5. **GitHub Webhooks** (optional): When `GITHUB_WEBHOOK_SECRET` is configured, `workflow_run` and `workflow_job` events push real-time updates. Polling intervals automatically increase to 5 min / 60 s for reconciliation only. Supports [smee.io](https://smee.io/) proxy via `SMEE_URL` for environments behind NAT/firewalls.
 
 ---
 
@@ -126,7 +128,7 @@ pie title "API Call Distribution (10 repos, moderate activity)"
 
 ## Optimization Strategies
 
-### 1. Conditional Requests with ETags (Recommended First)
+### 1. Conditional Requests with ETags — IMPLEMENTED
 
 **Impact: High | Effort: Low**
 
@@ -152,11 +154,11 @@ sequenceDiagram
     Note over App: Update cache + store new ETag
 ```
 
-**Implementation**: Add an ETag cache to `githubApi.js`'s `createClient()` function using axios request/response interceptors. Store ETags per URL, send `If-None-Match` on subsequent requests, return cached data on 304.
+**Implementation**: Implemented in `githubApi.js` via axios request/response interceptors. A module-level `Map` stores ETags per URL. The request interceptor attaches `If-None-Match`, and the response interceptor caches new ETags on 200 and returns cached data transparently on 304.
 
 **Expected savings**: In steady state (no new runs), nearly all discovery calls return 304, reducing effective rate consumption to near-zero. During active periods, only the endpoints with actual changes cost rate limit quota.
 
-### 2. GitHub Webhooks (Recommended Second)
+### 2. GitHub Webhooks — IMPLEMENTED (Optional)
 
 **Impact: High | Effort: Medium**
 
@@ -191,12 +193,7 @@ flowchart LR
 - `workflow_run` — fires when a run is requested, starts, or completes. Payload includes the full run object.
 - `workflow_job` — fires when a job is queued, starts, or completes. Payload includes the full job object with steps.
 
-**Setup requirements**:
-- Public URL (or use [smee.io](https://smee.io/) proxy for local dev)
-- Webhook secret for payload verification
-- Express middleware (e.g., `@octokit/webhooks`)
-
-**Hybrid approach**: Use webhooks as the primary real-time channel. Keep a low-frequency reconciliation poll (every 5-10 minutes) to catch missed events from server downtime.
+**Implementation**: Enabled by setting `GITHUB_WEBHOOK_SECRET`. The webhook endpoint at `POST /api/v1/webhooks/github` verifies HMAC-SHA256 signatures using Node.js `crypto` (no external library). Processes `workflow_run` and `workflow_job` events, upserts data via existing `syncService` functions, and broadcasts SSE updates. For containers behind NAT, set `SMEE_URL` to a [smee.io](https://smee.io/) channel (requires `smee-client` package). When webhooks are enabled, polling intervals automatically increase to 300s / 60s for reconciliation.
 
 **Expected savings**: Eliminates active run polling entirely (720 calls/hr per active run). Reduces discovery to a lightweight reconciliation poll. Total API usage drops to ~50-100 calls/hr regardless of activity level.
 
@@ -270,8 +267,8 @@ quadrantChart
 
 | Strategy | Impact | Effort | When to Use |
 |---|---|---|---|
-| **ETags** | High | Low | **Do first.** Immediate savings, minimal code changes. |
-| **Webhooks** | High | Medium | **Do second.** Eliminates polling for active runs entirely. |
+| **ETags** | High | Low | **Done.** Implemented in `githubApi.js`. |
+| **Webhooks** | High | Medium | **Done.** Optional via `GITHUB_WEBHOOK_SECRET`. |
 | **Configurable intervals** | Medium | Low | **Do alongside ETags.** Surface API cost to users. |
 | **GitHub App** | Medium | Medium | When you need >5,000 calls/hr or integrated webhooks. |
 | **Concurrency limiter** | Low | Low | Add defensively for cold start / rebuild scenarios. |

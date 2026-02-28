@@ -17,7 +17,7 @@ A self-hosted web dashboard that displays a chronological log of GitHub Actions 
 
 - **Chronological run log** with infinite scroll and cursor-based pagination
 - **Multi-repository support** across multiple GitHub organisations
-- **Real-time sync updates** via Server-Sent Events (SSE) backed by two-tier polling (discovery + active run tracking)
+- **Real-time sync updates** via Server-Sent Events (SSE) backed by two-tier polling with ETag conditional requests, and optional GitHub Webhooks for push-based updates
 - **Drill-down into jobs** — expand any run card to see individual job statuses, durations, billable minutes, and runner info
 - **Flexible filtering** by repository, status (success/failure/in_progress/cancelled), and branch
 - **GitHub status indicator** — live GitHub platform health shown in the app bar
@@ -43,9 +43,10 @@ A self-hosted web dashboard that displays a chronological log of GitHub Actions 
 
 GitActionsView uses a two-tier polling approach to balance freshness with API quota, with real-time push to connected browsers via Server-Sent Events (SSE):
 
-1. **Discovery poll** (default 60 s) fetches the latest 30 runs for each configured repository and upserts workflows, runs, and jobs into SQLite.
+1. **Discovery poll** (default 60 s) fetches the latest 30 runs for each configured repository and upserts workflows, runs, and jobs into SQLite. Uses **ETag conditional requests** — GitHub returns `304 Not Modified` when data hasn't changed, and 304 responses don't count against the rate limit.
 2. **Active run poll** (default 10 s) re-checks only in-flight runs (queued, in_progress, waiting) until they complete.
 3. **SSE broadcast** — each sync event (`sync:start`, `sync:complete`, `sync:poll`) is pushed to all connected clients so the frontend can update without its own polling timer.
+4. **GitHub Webhooks** (optional) — when configured, `workflow_run` and `workflow_job` events push real-time updates to the server, eliminating the need for frequent polling. Discovery and active polling intervals automatically increase to serve as a reconciliation fallback (5 min / 60 s). Supports [smee.io](https://smee.io/) proxy for containers behind NAT/firewalls.
 
 ## Container images
 
@@ -114,6 +115,10 @@ Initial configuration is set via environment variables. Polling intervals and re
 | `ACTIVE_POLL_SECONDS` | Seconds between active run polls | `10` |
 | `PORT` | HTTP listen port | `9000` |
 | `DB_PATH` | Path to SQLite database file | `./data/gitactionsview.db` |
+| `GITHUB_WEBHOOK_SECRET` | Webhook secret for real-time GitHub push events (optional) | `""` |
+| `SMEE_URL` | Smee.io channel URL for webhook proxying behind NAT | `""` |
+| `TRUST_PROXY` | Set `true` when behind a reverse proxy | `false` |
+| `COOKIE_SAME_SITE` | SameSite cookie attribute (`lax`, `strict`, `none`) | `lax` |
 
 ### Legacy single-owner format
 
@@ -166,6 +171,7 @@ Both OAuth2 and basic auth can be enabled simultaneously.
 | `GET /api/v1/github/status` | GitHub platform status (cached, 60 s TTL) |
 | `GET /api/v1/admin/db/stats` | Database metrics (file size, row counts, data age) |
 | `POST /api/v1/admin/db/rebuild` | Wipe all cached data and re-sync from GitHub |
+| `POST /api/v1/webhooks/github` | GitHub webhook receiver (HMAC-verified, no session auth) |
 
 ## Testing
 

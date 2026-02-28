@@ -57,8 +57,8 @@ gitactionsview/
     src/
       auth/           # Passport.js strategies, middleware
       db/             # SQLite setup and migrations (settings, repos tables)
-      routes/         # Express route handlers (runs, jobs, settings, repos, admin)
-      services/       # GitHub API, sync, dispatcher, settings, repos services
+      routes/         # Express route handlers (runs, jobs, settings, repos, admin, webhooks)
+      services/       # GitHub API, sync, dispatcher, webhook handler, settings, repos services
       utils/          # Helper functions (duration formatting)
       config.js       # Environment variable parsing + loadFromDb()
       index.js        # Express app entry point
@@ -173,9 +173,9 @@ Please open a GitHub issue with:
 
 SQLite provides a zero-dependency embedded database that works well for single-instance deployments. WAL mode ensures concurrent reads during writes, and the synchronous `better-sqlite3` driver avoids callback complexity.
 
-### Why polling instead of webhooks?
+### Why polling by default, with optional webhooks?
 
-GitHub Actions does not provide a real-time push API (no WebSocket or SSE). Webhooks are possible but require a publicly reachable URL, which complicates self-hosted setups behind NAT or firewalls. Polling with a two-tier strategy (infrequent discovery + frequent active run checks) provides a good balance of freshness and API quota usage.
+Polling is the default because it works in any environment — no public URL required. Webhooks are supported as an optional enhancement via `GITHUB_WEBHOOK_SECRET`. When enabled, `workflow_run` and `workflow_job` events push real-time updates, and polling intervals automatically increase to serve as a reconciliation fallback. For environments behind NAT or firewalls, [smee.io](https://smee.io/) can proxy webhook events to the container (set `SMEE_URL`). ETag conditional requests further reduce API consumption — unchanged data returns `304 Not Modified` at zero rate limit cost.
 
 ### Why hash-based routing?
 

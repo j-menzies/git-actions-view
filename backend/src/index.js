@@ -15,6 +15,11 @@ if (config.trustProxy) {
   app.set('trust proxy', 1);
 }
 
+// Webhook route must be registered before express.json() to preserve raw body for HMAC verification
+if (config.isWebhooksEnabled) {
+  app.use(require('./routes/webhooks'));
+}
+
 // Middleware
 app.use(cookieParser());
 app.use(express.json());
@@ -79,6 +84,23 @@ const server = app.listen(config.port, () => {
   if (config.isOAuth2Enabled) console.log('GitHub OAuth2 enabled');
   if (config.isBasicAuthEnabled) console.log('Basic Auth enabled');
   if (!config.isAuthRequired) console.log('No authentication configured — all endpoints public');
+  if (config.isWebhooksEnabled) {
+    console.log('GitHub Webhooks enabled (polling intervals increased for reconciliation)');
+    if (config.smeeUrl) {
+      try {
+        const SmeeClient = require('smee-client');
+        const smee = new SmeeClient({
+          source: config.smeeUrl,
+          target: `http://localhost:${config.port}/api/v1/webhooks/github`,
+          logger: console,
+        });
+        smee.start();
+        console.log(`Smee.io proxy: ${config.smeeUrl}`);
+      } catch (err) {
+        console.warn(`Smee.io client not available: ${err.message}. Install smee-client to use webhook proxying.`);
+      }
+    }
+  }
 });
 
 // Graceful shutdown

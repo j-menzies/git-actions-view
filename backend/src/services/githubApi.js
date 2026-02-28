@@ -2,6 +2,17 @@ const axios = require('axios');
 const config = require('../config');
 const rateLimitTracker = require('./rateLimitTracker');
 
+// ETag cache: full URL (with params) -> { etag, data }
+const etagCache = new Map();
+
+function buildCacheKey(reqConfig) {
+  let url = (reqConfig.baseURL || '') + (reqConfig.url || '');
+  if (reqConfig.params && Object.keys(reqConfig.params).length > 0) {
+    url += '?' + new URLSearchParams(reqConfig.params).toString();
+  }
+  return url;
+}
+
 function createClient(accessToken) {
   const token = accessToken || config.githubAccessToken;
   const client = axios.create({
@@ -12,12 +23,36 @@ function createClient(accessToken) {
     timeout: 30000,
   });
 
+  // Request interceptor: attach If-None-Match when we have a cached ETag
+  client.interceptors.request.use((reqConfig) => {
+    const cacheKey = buildCacheKey(reqConfig);
+    const cached = etagCache.get(cacheKey);
+    if (cached?.etag) {
+      reqConfig.headers['If-None-Match'] = cached.etag;
+    }
+    reqConfig._etagCacheKey = cacheKey;
+    return reqConfig;
+  });
+
   client.interceptors.response.use(
     (response) => {
       rateLimitTracker.update(response.headers);
+      // Cache ETag + response data for future conditional requests
+      const etag = response.headers['etag'];
+      if (etag && response.config._etagCacheKey) {
+        etagCache.set(response.config._etagCacheKey, { etag, data: response.data });
+      }
       return response;
     },
     (error) => {
+      // Handle 304 Not Modified — return cached data (no rate limit cost)
+      if (error.response?.status === 304) {
+        const cacheKey = error.config?._etagCacheKey;
+        const cached = cacheKey && etagCache.get(cacheKey);
+        if (cached) {
+          return { data: cached.data, status: 304, headers: error.response.headers };
+        }
+      }
       if (error.response?.headers) {
         rateLimitTracker.update(error.response.headers);
       }
@@ -34,6 +69,10 @@ function createClient(accessToken) {
   );
 
   return client;
+}
+
+function _resetEtagCache() {
+  etagCache.clear();
 }
 
 async function listWorkflows(owner, repo, accessToken) {
@@ -108,4 +147,5 @@ module.exports = {
   getWorkflowRun,
   listRunJobs,
   listUserRepos,
+  _resetEtagCache,
 };

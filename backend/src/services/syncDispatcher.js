@@ -117,15 +117,21 @@ function start() {
   // Run initial discovery immediately
   runDiscovery();
 
+  // When webhooks are enabled, increase polling intervals (polling becomes reconciliation fallback)
+  const discoverySecs = config.isWebhooksEnabled
+    ? Math.max(config.discoveryPollSeconds, 300)
+    : config.discoveryPollSeconds;
+  const activeSecs = config.isWebhooksEnabled
+    ? Math.max(config.activePollSeconds, 60)
+    : config.activePollSeconds;
+
   // Schedule discovery poll
-  const discoverySecs = config.discoveryPollSeconds;
   discoveryTimer = setInterval(runDiscovery, discoverySecs * 1000);
-  console.log(`Discovery poll scheduled every ${discoverySecs}s`);
+  console.log(`Discovery poll scheduled every ${discoverySecs}s${config.isWebhooksEnabled ? ' (webhook reconciliation mode)' : ''}`);
 
   // Schedule active run poll
-  const activeSecs = config.activePollSeconds;
   activeTimer = setInterval(pollActiveRuns, activeSecs * 1000);
-  console.log(`Active run poll scheduled every ${activeSecs}s`);
+  console.log(`Active run poll scheduled every ${activeSecs}s${config.isWebhooksEnabled ? ' (webhook reconciliation mode)' : ''}`);
 }
 
 function stop() {

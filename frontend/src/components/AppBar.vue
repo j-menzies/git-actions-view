@@ -108,7 +108,7 @@
       </v-menu>
 
       <!-- Profile menu -->
-      <v-menu location="bottom end" :close-on-content-click="false">
+      <v-menu v-model="profileMenuOpen" location="bottom end" :close-on-content-click="false">
         <template #activator="{ props: menuProps }">
           <v-btn
             v-if="user"
@@ -142,14 +142,14 @@
 
           <v-divider class="my-1" />
 
-          <v-list-item :to="{ name: 'Settings' }" data-testid="menu-settings">
+          <v-list-item :to="{ name: 'Settings' }" @click="profileMenuOpen = false" data-testid="menu-settings">
             <template #prepend>
               <v-icon>mdi-cog</v-icon>
             </template>
             <v-list-item-title>Settings</v-list-item-title>
           </v-list-item>
 
-          <v-list-item @click="toggleTheme" data-testid="menu-theme-toggle">
+          <v-list-item @click="toggleTheme(); profileMenuOpen = false" data-testid="menu-theme-toggle">
             <template #prepend>
               <v-icon>{{ isDark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
             </template>
@@ -158,7 +158,7 @@
 
           <v-divider class="my-1" />
 
-          <v-list-item @click="handleLogout" data-testid="menu-logout">
+          <v-list-item @click="handleLogout(); profileMenuOpen = false" data-testid="menu-logout">
             <template #prepend>
               <v-icon>mdi-logout</v-icon>
             </template>
@@ -185,6 +185,7 @@ const route = useRoute()
 const router = useRouter()
 const user = ref(null)
 const filterMenuOpen = ref(false)
+const profileMenuOpen = ref(false)
 
 const { state: filterState, setFilter } = useFilters()
 const { isFullscreen, isSupported: isFullscreenSupported, toggleFullscreen } = useFullscreen()

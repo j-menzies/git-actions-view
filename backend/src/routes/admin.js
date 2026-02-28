@@ -5,6 +5,7 @@ const { ensureAuthenticated } = require('../auth/middleware');
 const { getDb } = require('../db/database');
 const syncDispatcher = require('../services/syncDispatcher');
 const { _resetCache } = require('../services/syncService');
+const { _resetEtagCache } = require('../services/githubApi');
 const config = require('../config');
 
 const router = express.Router();
@@ -20,6 +21,7 @@ router.post('/api/v1/admin/db/rebuild', ensureAuthenticated, (req, res) => {
     db.exec('DELETE FROM workflow_runs');
     db.exec('DELETE FROM workflows');
     _resetCache();
+    _resetEtagCache();
     console.log('Database cache cleared — all workflow data deleted');
 
     // Restart the dispatcher to trigger a fresh discovery sync
