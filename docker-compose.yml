@@ -1,7 +1,7 @@
 services:
   gitactionsview:
-    image: ghcr.io/j-menzies/git-actions-view:latest
-    # build: .  # Uncomment to build locally instead of pulling the published image
+    # image: ghcr.io/j-menzies/git-actions-view:latest
+    build: .
     ports:
       - "9000:9000"
     environment:
