@@ -37,8 +37,10 @@ import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { fetchRuns, fetchConfig } from '@/services/api'
 import RunCard from './RunCard.vue'
 import { useFilters } from '@/composables/useFilters'
+import { useSyncStatus } from '@/composables/useSyncStatus'
 
 const { state: filterState, setRepositories } = useFilters()
+const syncStatus = useSyncStatus()
 
 const runs = ref([])
 const initialLoading = ref(true)
@@ -47,7 +49,6 @@ const hasMore = ref(true)
 const nextCursor = ref(null)
 const sentinel = ref(null)
 let observer = null
-let refreshTimer = null
 
 function currentFilterParams() {
   return {
@@ -127,6 +128,13 @@ watch(() => filterState.revision, () => {
   loadRuns()
 })
 
+// Refresh when SSE reports a sync completion (webhook or poll)
+watch(() => syncStatus.lastSyncComplete, () => {
+  if (!initialLoading.value) {
+    refreshTop()
+  }
+})
+
 function setupIntersectionObserver() {
   if (!sentinel.value) return
   observer = new IntersectionObserver(
@@ -145,12 +153,10 @@ onMounted(async () => {
   await loadRuns()
   await nextTick()
   setupIntersectionObserver()
-  refreshTimer = setInterval(refreshTop, 15000)
 })
 
 onUnmounted(() => {
   if (observer) observer.disconnect()
-  if (refreshTimer) clearInterval(refreshTimer)
 })
 </script>
 

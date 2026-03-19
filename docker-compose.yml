@@ -13,6 +13,8 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
       - DISCOVERY_POLL_SECONDS=${DISCOVERY_POLL_SECONDS:-60}
       - ACTIVE_POLL_SECONDS=${ACTIVE_POLL_SECONDS:-10}
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:-}
+      - SMEE_URL=${SMEE_URL:-}
       - DB_PATH=/app/data/gitactionsview.db
     volumes:
       - ./data:/app/data

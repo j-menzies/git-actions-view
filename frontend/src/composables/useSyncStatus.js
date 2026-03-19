@@ -9,6 +9,7 @@ export function provideSyncStatus() {
     lastDiscoveryPoll: null,
     lastActivePoll: null,
     repoCount: null,
+    lastSyncComplete: 0,
   })
 
   let eventSource = null
@@ -34,6 +35,7 @@ export function provideSyncStatus() {
       if (state.syncingRepo === data.repo) {
         state.syncingRepo = null
       }
+      state.lastSyncComplete = Date.now()
     })
 
     eventSource.addEventListener('sync:poll', (e) => {
