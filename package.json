@@ -4,8 +4,7 @@
   "private": true,
   "description": "GitActionsView - Chronological GitHub Actions run log",
   "scripts": {
-    "start": "npm run build --prefix frontend && mkdir -p backend/public && cp -r frontend/dist/* backend/public/ && (node --env-file=.env backend/src/index.js > backend.log 2>&1 &) && echo 'Started — log: backend.log'",
-    "dev": "npx concurrently -n backend,frontend -c blue,green \"node --env-file=.env --watch backend/src/index.js\" \"npm run dev --prefix frontend\"",
+    "start": "npm run build --prefix frontend && mkdir -p backend/public && cp -r frontend/dist/* backend/public/ && node --env-file=.env backend/src/index.js",
     "stop": "lsof -ti:9000,5173 | xargs kill 2>/dev/null; echo 'Stopped'",
     "docker": "docker build -t gitactionsview . && docker run -d -p 9000:9000 --env-file .env -v ./data:/app/data --name gitactionsview gitactionsview",
     "docker:stop": "docker rm -f gitactionsview 2>/dev/null; echo 'Stopped'",
