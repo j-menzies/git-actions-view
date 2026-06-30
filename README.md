@@ -2,8 +2,9 @@
 
 A self-hosted web dashboard that displays a chronological log of GitHub Actions workflow runs across multiple repositories. Monitor CI/CD pipelines in real time with an infinite-scroll timeline, drill into individual jobs, and filter by repository, status, or branch.
 
-<!-- Screenshots — replace these placeholders with actual captures -->
-<!-- Tip: seed the database with `node backend/scripts/seed-mock-data.js` for realistic demo data -->
+<!--
+Screenshots — replace these placeholders with actual captures.
+Tip: seed the database with `node backend/scripts/seed-mock-data.js` for realistic demo data.
 
 | Light theme | Dark theme |
 |---|---|
@@ -12,7 +13,7 @@ A self-hosted web dashboard that displays a chronological log of GitHub Actions 
 | Expanded jobs | Settings page |
 |---|---|
 | ![Jobs drill-down](docs/screenshots/jobs-drilldown.png) | ![Settings](docs/screenshots/settings.png) |
-
+-->
 ## Features
 
 - **Chronological run log** with infinite scroll and cursor-based pagination
