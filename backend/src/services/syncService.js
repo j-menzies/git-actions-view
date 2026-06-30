@@ -152,7 +152,7 @@ async function syncRepoRuns(owner, repo, accessToken) {
           for (const job of jobs) {
             upsertJob(job, run.id);
           }
-          jobsFetched++;
+          jobsFetched += jobs.length;
         } catch (err) {
           console.error(`[sync] ${repoFullName}: failed to fetch jobs for active run ${run.id}: ${err.message}`);
         }
