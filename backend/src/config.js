@@ -5,9 +5,12 @@ const config = {
   githubOAuth2ClientId: process.env.GITHUB_OAUTH2_CLIENT_ID || '',
   githubOAuth2ClientSecret: process.env.GITHUB_OAUTH2_CLIENT_SECRET || '',
   basicAuthFilePath: process.env.BASIC_AUTH_USER_DETAILS_FILE_PATH || '',
-  baseUrl: process.env.BASE_URL || 'http://localhost:9000',
+  baseUrl: (process.env.BASE_URL || 'http://localhost:9000').replace(/\/$/, ''),
   sessionSecret: process.env.SESSION_SECRET || 'change-me-in-production',
-  cookieSameSite: process.env.COOKIE_SAME_SITE || 'lax',
+  cookieSameSite: (() => {
+    const v = (process.env.COOKIE_SAME_SITE || 'lax').toLowerCase();
+    return ['lax', 'strict', 'none'].includes(v) ? v : 'lax';
+  })(),
   trustProxy: process.env.TRUST_PROXY === 'true',
   discoveryPollSeconds: parseInt(process.env.DISCOVERY_POLL_SECONDS || '60', 10),
   activePollSeconds: parseInt(process.env.ACTIVE_POLL_SECONDS || '10', 10),
