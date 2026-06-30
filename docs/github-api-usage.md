@@ -171,9 +171,7 @@ flowchart LR
         WJ[workflow_job event]
     end
 
-    subgraph GitActionsView
-        WH[Webhook Endpoint<br/>/api/github/webhooks]
-        DB[(SQLite DB)]
+        WH[Webhook Endpoint<br/>/api/v1/webhooks/github]
         SSE[SSE Broadcast]
     end
 
