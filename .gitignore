@@ -1,5 +1,6 @@
 node_modules/
 dist/
+backend/public/
 data/
 *.db
 *.sqlite
@@ -8,3 +9,4 @@ data/
 coverage/
 .env
 .DS_Store
+*.log

@@ -1,5 +1,6 @@
 const express = require('express');
 const session = require('express-session');
+const SqliteStore = require('better-sqlite3-session-store')(session);
 const cookieParser = require('cookie-parser');
 const path = require('path');
 const config = require('./config');
@@ -9,19 +10,31 @@ const syncDispatcher = require('./services/syncDispatcher');
 
 const app = express();
 
+// Trust proxy when behind reverse proxy (needed for secure cookies)
+if (config.trustProxy) {
+  app.set('trust proxy', 1);
+}
+
+// Webhook route must be registered before express.json() to preserve raw body for HMAC verification
+if (config.isWebhooksEnabled) {
+  app.use(require('./routes/webhooks'));
+}
+
 // Middleware
 app.use(cookieParser());
 app.use(express.json());
+const sessionStore = new SqliteStore({ client: getDb(), expired: { clear: true, intervalMs: 900000 } });
 app.use(
   session({
+    store: sessionStore,
     secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
       maxAge: 7 * 60 * 60 * 1000, // 7 hours
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production' && process.env.TRUST_PROXY === 'true',
+      sameSite: config.cookieSameSite,
+      secure: config.trustProxy || config.cookieSameSite === 'none',
     },
   })
 );
@@ -71,19 +84,34 @@ const server = app.listen(config.port, () => {
   if (config.isOAuth2Enabled) console.log('GitHub OAuth2 enabled');
   if (config.isBasicAuthEnabled) console.log('Basic Auth enabled');
   if (!config.isAuthRequired) console.log('No authentication configured — all endpoints public');
+  if (config.isWebhooksEnabled) {
+    console.log('GitHub Webhooks enabled (polling intervals increased for reconciliation)');
+    if (config.smeeUrl) {
+      try {
+        const SmeeClient = require('smee-client');
+        const smee = new SmeeClient({
+          source: config.smeeUrl,
+          target: `http://localhost:${config.port}/api/v1/webhooks/github`,
+          logger: console,
+        });
+        smee.start();
+        console.log(`Smee.io proxy: ${config.smeeUrl}`);
+      } catch (err) {
+        console.warn(`Smee.io client not available: ${err.message}. Install smee-client to use webhook proxying.`);
+      }
+    }
+  }
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+function shutdown() {
   console.log('Shutting down...');
   syncDispatcher.stop();
-  closeDb();
-  server.close();
-});
+  server.close(() => {
+    closeDb();
+    process.exit(0);
+  });
+}
 
-process.on('SIGINT', () => {
-  console.log('Shutting down...');
-  syncDispatcher.stop();
-  closeDb();
-  server.close();
-});
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

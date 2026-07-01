@@ -2,6 +2,7 @@ const config = require('../config');
 const { syncRepoRuns, syncActiveRun } = require('./syncService');
 const reposService = require('./reposService');
 const { broadcast } = require('./sseManager');
+const rateLimitTracker = require('./rateLimitTracker');
 
 // Set of active (in-flight) runs: { id, owner, repo, trackedSince }
 const activeRuns = new Map();
@@ -16,6 +17,13 @@ let prevActiveCount = 0;
 
 async function runDiscovery() {
   if (isSyncing) return;
+  if (rateLimitTracker.shouldPause()) {
+    const status = rateLimitTracker.getStatus();
+    const resetDate = status.resetAt ? new Date(status.resetAt * 1000).toISOString() : 'unknown';
+    console.log(`Discovery skipped — rate limited (${status.remaining}/${status.limit}). Resumes at ${resetDate}`);
+    broadcast('sync:rateLimited', { paused: true, ...status });
+    return;
+  }
   if (!config.githubAccessToken && !config.isOAuth2Enabled) {
     return; // No token available for background sync
   }
@@ -25,11 +33,21 @@ async function runDiscovery() {
 
   try {
     const repos = reposService.getVisibleRepos();
+    let successCount = 0;
+    let failCount = 0;
+
     for (const repo of repos) {
       const repoFullName = `${repo.owner}/${repo.name}`;
       broadcast('sync:start', { repo: repoFullName, type: 'discovery' });
       const newActive = await syncRepoRuns(repo.owner, repo.name, token);
       broadcast('sync:complete', { repo: repoFullName, type: 'discovery' });
+
+      if (newActive === null) {
+        failCount++;
+        continue;
+      }
+
+      successCount++;
       for (const run of newActive) {
         const key = `${run.owner}/${run.repo}/${run.id}`;
         if (!activeRuns.has(key)) {
@@ -37,24 +55,34 @@ async function runDiscovery() {
         }
       }
     }
+
     const currentActive = activeRuns.size;
-    if (currentActive > 0 || prevActiveCount > 0) {
+    if (failCount > 0) {
+      console.warn(
+        `Discovery sync: ${successCount}/${repos.length} repo(s) succeeded, ${failCount} failed. ${currentActive} active run(s) tracked.`
+      );
+    } else {
       console.log(
-        `Discovery sync complete. ${currentActive} active run(s) tracked.`
+        `Discovery sync complete for ${repos.length} repo(s). ${currentActive} active run(s) tracked.`
       );
     }
     prevActiveCount = currentActive;
+
+    // Only update last sync time if at least one repo succeeded
+    if (successCount > 0) {
+      lastDiscoveryPollTime = new Date().toISOString();
+      broadcast('sync:poll', { lastPollTime: lastDiscoveryPollTime, type: 'discovery', repoCount: repos.length });
+    }
   } catch (err) {
     console.error('Discovery sync error:', err.message);
   } finally {
     isSyncing = false;
-    lastDiscoveryPollTime = new Date().toISOString();
-    broadcast('sync:poll', { lastPollTime: lastDiscoveryPollTime, type: 'discovery' });
   }
 }
 
 async function pollActiveRuns() {
   if (activeRuns.size === 0) return;
+  if (rateLimitTracker.shouldPause()) return;
   const token = config.githubAccessToken;
 
   const entries = Array.from(activeRuns.entries());
@@ -89,15 +117,21 @@ function start() {
   // Run initial discovery immediately
   runDiscovery();
 
+  // When webhooks are enabled, increase polling intervals (polling becomes reconciliation fallback)
+  const discoverySecs = config.isWebhooksEnabled
+    ? Math.max(config.discoveryPollSeconds, 300)
+    : config.discoveryPollSeconds;
+  const activeSecs = config.isWebhooksEnabled
+    ? Math.max(config.activePollSeconds, 60)
+    : config.activePollSeconds;
+
   // Schedule discovery poll
-  const discoverySecs = config.discoveryPollSeconds;
   discoveryTimer = setInterval(runDiscovery, discoverySecs * 1000);
-  console.log(`Discovery poll scheduled every ${discoverySecs}s`);
+  console.log(`Discovery poll scheduled every ${discoverySecs}s${config.isWebhooksEnabled ? ' (webhook reconciliation mode)' : ''}`);
 
   // Schedule active run poll
-  const activeSecs = config.activePollSeconds;
   activeTimer = setInterval(pollActiveRuns, activeSecs * 1000);
-  console.log(`Active run poll scheduled every ${activeSecs}s`);
+  console.log(`Active run poll scheduled every ${activeSecs}s${config.isWebhooksEnabled ? ' (webhook reconciliation mode)' : ''}`);
 }
 
 function stop() {
@@ -122,6 +156,10 @@ function restart() {
  * @param {string} name
  */
 async function syncSingleRepo(owner, name) {
+  if (rateLimitTracker.shouldPause()) {
+    console.warn(`Single repo sync skipped for ${owner}/${name} — rate limited`);
+    return;
+  }
   if (!config.githubAccessToken && !config.isOAuth2Enabled) {
     return;
   }
@@ -145,7 +183,7 @@ async function syncSingleRepo(owner, name) {
 }
 
 function getLastPollTimes() {
-  return { discovery: lastDiscoveryPollTime, active: lastActivePollTime };
+  return { discovery: lastDiscoveryPollTime, active: lastActivePollTime, rateLimit: rateLimitTracker.getStatus() };
 }
 
 module.exports = { start, stop, restart, syncSingleRepo, getLastPollTimes };

@@ -2,18 +2,33 @@
 
 A self-hosted web dashboard that displays a chronological log of GitHub Actions workflow runs across multiple repositories. Monitor CI/CD pipelines in real time with an infinite-scroll timeline, drill into individual jobs, and filter by repository, status, or branch.
 
+<!--
+Screenshots — replace these placeholders with actual captures.
+Tip: seed the database with `node backend/scripts/seed-mock-data.js` for realistic demo data.
+
+| Light theme | Dark theme |
+|---|---|
+| ![Run log – light](docs/screenshots/run-log-light.png) | ![Run log – dark](docs/screenshots/run-log-dark.png) |
+
+| Expanded jobs | Settings page |
+|---|---|
+| ![Jobs drill-down](docs/screenshots/jobs-drilldown.png) | ![Settings](docs/screenshots/settings.png) |
+-->
 ## Features
 
 - **Chronological run log** with infinite scroll and cursor-based pagination
 - **Multi-repository support** across multiple GitHub organisations
-- **Real-time updates** via smart two-tier polling (discovery + active run tracking)
-- **Drill-down into jobs** by expanding any run card to see individual job statuses
+- **Real-time sync updates** via Server-Sent Events (SSE) backed by two-tier polling with ETag conditional requests, and optional GitHub Webhooks for push-based updates
+- **Drill-down into jobs** — expand any run card to see individual job statuses, durations, billable minutes, and runner info
 - **Flexible filtering** by repository, status (success/failure/in_progress/cancelled), and branch
+- **GitHub status indicator** — live GitHub platform health shown in the app bar
+- **Fullscreen mode** — toggle via app bar button, F11, or Ctrl/Cmd+Shift+F
 - **GitHub OAuth2 login** for private repositories (same flow as [gitactionboard](https://github.com/otto-de/gitactionboard))
 - **Basic auth** option via htpasswd file
 - **Light and dark themes** matching GitHub's colour palette, persisted across sessions
 - **Clickable links** — repo names, branches, PR events, and actor avatars link directly to GitHub
 - **Settings page** for managing polling intervals, repositories (add/hide/remove), and database cache rebuilds
+- **Database and repository stats** — view row counts, data age, and per-repo metrics
 - **Docker-ready** single-container deployment with multi-stage build
 
 ## Architecture
@@ -25,16 +40,18 @@ A self-hosted web dashboard that displays a chronological log of GitHub Actions 
 | Database  | SQLite (better-sqlite3, WAL mode)        |
 | Container | Docker (node:22-alpine, multi-stage)     |
 
-### Polling strategy
+### Sync strategy
 
-GitActionsView uses a two-tier polling approach to balance freshness with API quota:
+GitActionsView uses a two-tier polling approach to balance freshness with API quota, with real-time push to connected browsers via Server-Sent Events (SSE):
 
-1. **Discovery poll** (default 60 s) fetches the latest 30 runs for each configured repository and upserts workflows, runs, and jobs into SQLite.
+1. **Discovery poll** (default 60 s) fetches the latest 30 runs for each configured repository and upserts workflows, runs, and jobs into SQLite. Uses **ETag conditional requests** — GitHub returns `304 Not Modified` when data hasn't changed, and 304 responses don't count against the rate limit.
 2. **Active run poll** (default 10 s) re-checks only in-flight runs (queued, in_progress, waiting) until they complete.
+3. **SSE broadcast** — each sync event (`sync:start`, `sync:complete`, `sync:poll`) is pushed to all connected clients so the frontend can update without its own polling timer.
+4. **GitHub Webhooks** (optional) — when configured, `workflow_run` and `workflow_job` events push real-time updates to the server, eliminating the need for frequent polling. Discovery and active polling intervals automatically increase to serve as a reconciliation fallback (5 min / 60 s). Supports [smee.io](https://smee.io/) proxy for containers behind NAT/firewalls.
 
 ## Container images
 
-Pre-built Docker images are published to GitHub Container Registry on every release.
+Pre-built Docker images are published to GitHub Container Registry whenever a semver tag (`v*.*.*`) is pushed. The CI pipeline runs backend and frontend tests first — the image is only built and pushed if both pass.
 
 ```bash
 docker pull ghcr.io/j-menzies/git-actions-view:latest
@@ -42,7 +59,7 @@ docker pull ghcr.io/j-menzies/git-actions-view:latest
 
 | Tag | Description |
 |-----|-------------|
-| `latest` | Most recent release |
+| `latest` | Most recent release (auto-applied by CI) |
 | `1.2.3` | Specific version |
 | `1.2` | Latest patch in a minor series |
 | `1` | Latest minor/patch in a major series |
@@ -99,6 +116,10 @@ Initial configuration is set via environment variables. Polling intervals and re
 | `ACTIVE_POLL_SECONDS` | Seconds between active run polls | `10` |
 | `PORT` | HTTP listen port | `9000` |
 | `DB_PATH` | Path to SQLite database file | `./data/gitactionsview.db` |
+| `GITHUB_WEBHOOK_SECRET` | Webhook secret for real-time GitHub push events (optional) | `""` |
+| `SMEE_URL` | Smee.io channel URL for webhook proxying behind NAT | `""` |
+| `TRUST_PROXY` | Set `true` when behind a reverse proxy | `false` |
+| `COOKIE_SAME_SITE` | SameSite cookie attribute (`lax`, `strict`, `none`) | `lax` |
 
 ### Legacy single-owner format
 
@@ -140,13 +161,18 @@ Both OAuth2 and basic auth can be enabled simultaneously.
 | `GET /api/me` | Current user info |
 | `GET /api/v1/runs` | Paginated runs (supports `limit`, `before`, `repo`, `status`, `branch`, `from`, `to`) |
 | `GET /api/v1/runs/:id/jobs` | Jobs for a specific run |
+| `GET /api/v1/events` | SSE stream of real-time sync updates (`sync:start`, `sync:complete`, `sync:poll`) |
 | `GET /api/v1/settings` | Current polling interval settings |
 | `PUT /api/v1/settings` | Update polling intervals (restarts dispatcher) |
 | `GET /api/v1/repos` | List all repositories (including hidden) |
 | `POST /api/v1/repos` | Add a repository and trigger immediate sync |
 | `PUT /api/v1/repos/:id` | Update a repository (toggle visibility) |
 | `DELETE /api/v1/repos/:id` | Delete a repository and its cached data |
+| `GET /api/v1/repos/:id/stats` | Per-repository metrics (run/workflow/job counts, latest run) |
+| `GET /api/v1/github/status` | GitHub platform status (cached, 60 s TTL) |
+| `GET /api/v1/admin/db/stats` | Database metrics (file size, row counts, data age) |
 | `POST /api/v1/admin/db/rebuild` | Wipe all cached data and re-sync from GitHub |
+| `POST /api/v1/webhooks/github` | GitHub webhook receiver (HMAC-verified, no session auth) |
 
 ## Testing
 

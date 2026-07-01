@@ -12,7 +12,7 @@ function setupPassport(app) {
         {
           clientID: config.githubOAuth2ClientId,
           clientSecret: config.githubOAuth2ClientSecret,
-          callbackURL: '/auth/github/callback',
+          callbackURL: `${config.baseUrl}/auth/github/callback`,
           scope: ['read:user', 'repo'],
         },
         (accessToken, refreshToken, profile, done) => {

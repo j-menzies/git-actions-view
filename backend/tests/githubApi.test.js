@@ -1,17 +1,29 @@
 const axios = require('axios');
 
 jest.mock('axios');
+jest.mock('../src/services/rateLimitTracker');
 
 describe('githubApi', () => {
   const originalEnv = process.env;
   let mockGet;
+  let mockInterceptorUse;
+  let rateLimitTracker;
 
   beforeEach(() => {
     process.env = { ...originalEnv };
     delete process.env.GITHUB_ACCESS_TOKEN;
     delete process.env.DOMAIN_NAME;
     mockGet = jest.fn();
-    axios.create.mockReturnValue({ get: mockGet });
+    mockInterceptorUse = jest.fn();
+    axios.create.mockReturnValue({
+      get: mockGet,
+      interceptors: {
+        request: { use: jest.fn() },
+        response: { use: mockInterceptorUse },
+      },
+    });
+    rateLimitTracker = require('../src/services/rateLimitTracker');
+    rateLimitTracker.update.mockClear();
   });
 
   afterAll(() => {
@@ -130,6 +142,69 @@ describe('githubApi', () => {
         timeout: 30000,
       })
     );
+  });
+
+  test('registers response interceptor on client', async () => {
+    mockGet.mockResolvedValue({ data: { workflows: [] } });
+    await githubApi.listWorkflows('org', 'repo', 'token');
+    expect(mockInterceptorUse).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.any(Function)
+    );
+  });
+
+  test('response interceptor calls rateLimitTracker.update on success', async () => {
+    mockGet.mockResolvedValue({ data: { workflows: [] } });
+    await githubApi.listWorkflows('org', 'repo', 'token');
+
+    const [onSuccess] = mockInterceptorUse.mock.calls[0];
+    const fakeResponse = { headers: { 'x-ratelimit-remaining': '4999' }, data: {} };
+    const result = onSuccess(fakeResponse);
+
+    expect(rateLimitTracker.update).toHaveBeenCalledWith(fakeResponse.headers);
+    expect(result).toBe(fakeResponse);
+  });
+
+  test('response interceptor calls rateLimitTracker.update on error', async () => {
+    mockGet.mockResolvedValue({ data: { workflows: [] } });
+    await githubApi.listWorkflows('org', 'repo', 'token');
+
+    const [, onError] = mockInterceptorUse.mock.calls[0];
+    const fakeError = {
+      response: {
+        status: 500,
+        headers: { 'x-ratelimit-remaining': '100' },
+      },
+      message: 'Server error',
+    };
+
+    expect(() => onError(fakeError)).toThrow();
+    expect(rateLimitTracker.update).toHaveBeenCalledWith(fakeError.response.headers);
+  });
+
+  test('response interceptor throws rate limit error on 403 with remaining=0', async () => {
+    mockGet.mockResolvedValue({ data: { workflows: [] } });
+    await githubApi.listWorkflows('org', 'repo', 'token');
+
+    const [, onError] = mockInterceptorUse.mock.calls[0];
+    const fakeError = {
+      response: {
+        status: 403,
+        headers: {
+          'x-ratelimit-remaining': '0',
+          'x-ratelimit-reset': '1700000000',
+        },
+      },
+      message: 'Forbidden',
+    };
+
+    try {
+      onError(fakeError);
+      throw new Error('should have thrown');
+    } catch (err) {
+      expect(err.message).toMatch('GitHub API rate limit exceeded');
+      expect(err.isRateLimit).toBe(true);
+    }
   });
 
   test('listUserRepos fetches all pages of user repos', async () => {

@@ -1,11 +1,22 @@
 <template>
-  <v-app-bar flat border>
+  <v-app-bar flat border density="compact">
     <v-app-bar-title>
       <router-link :to="{ name: 'Runs' }" class="app-title-link">
         <v-icon class="mr-1">mdi-github</v-icon>
         GitActionsView
       </router-link>
     </v-app-bar-title>
+
+    <div class="sync-status-centered d-flex align-center text-caption text-medium-emphasis">
+      <v-icon
+        size="8"
+        :color="syncStatus.connected ? 'success' : 'error'"
+        class="mr-1"
+      >mdi-circle</v-icon>
+      <span>{{ lastSyncLabel }}</span>
+      <span v-if="syncStatus.repoCount != null" class="mx-1">|</span>
+      <span v-if="syncStatus.repoCount != null">{{ syncStatus.repoCount }} repos</span>
+    </div>
 
     <template #append>
       <!-- GitHub Status -->
@@ -97,7 +108,7 @@
       </v-menu>
 
       <!-- Profile menu -->
-      <v-menu location="bottom end" :close-on-content-click="false">
+      <v-menu v-model="profileMenuOpen" location="bottom end" :close-on-content-click="false">
         <template #activator="{ props: menuProps }">
           <v-btn
             v-if="user"
@@ -131,14 +142,14 @@
 
           <v-divider class="my-1" />
 
-          <v-list-item :to="{ name: 'Settings' }" data-testid="menu-settings">
+          <v-list-item :to="{ name: 'Settings' }" @click="profileMenuOpen = false" data-testid="menu-settings">
             <template #prepend>
               <v-icon>mdi-cog</v-icon>
             </template>
             <v-list-item-title>Settings</v-list-item-title>
           </v-list-item>
 
-          <v-list-item @click="toggleTheme" data-testid="menu-theme-toggle">
+          <v-list-item @click="toggleTheme(); profileMenuOpen = false" data-testid="menu-theme-toggle">
             <template #prepend>
               <v-icon>{{ isDark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
             </template>
@@ -147,7 +158,7 @@
 
           <v-divider class="my-1" />
 
-          <v-list-item @click="handleLogout" data-testid="menu-logout">
+          <v-list-item @click="handleLogout(); profileMenuOpen = false" data-testid="menu-logout">
             <template #prepend>
               <v-icon>mdi-logout</v-icon>
             </template>
@@ -160,12 +171,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useTheme } from 'vuetify'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchMe, logout } from '@/services/api'
 import { useFilters } from '@/composables/useFilters'
 import { useFullscreen } from '@/composables/useFullscreen'
+import { useSyncStatus } from '@/composables/useSyncStatus'
 import GitHubStatusIndicator from './GitHubStatusIndicator.vue'
 
 const theme = useTheme()
@@ -173,11 +185,28 @@ const route = useRoute()
 const router = useRouter()
 const user = ref(null)
 const filterMenuOpen = ref(false)
+const profileMenuOpen = ref(false)
 
 const { state: filterState, setFilter } = useFilters()
 const { isFullscreen, isSupported: isFullscreenSupported, toggleFullscreen } = useFullscreen()
+const syncStatus = useSyncStatus()
 
 const isDark = computed(() => theme.global.current.value.dark)
+
+const now = ref(new Date())
+let clockTimer = null
+
+const lastSyncLabel = computed(() => {
+  const poll = syncStatus.lastDiscoveryPoll
+  if (!poll) return 'Waiting for sync...'
+  const pollDate = new Date(poll)
+  const diffSec = Math.round((now.value - pollDate) / 1000)
+  if (diffSec < 5) return 'Just now'
+  if (diffSec < 60) return `${diffSec}s ago`
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin}m ago`
+  return pollDate.toLocaleTimeString()
+})
 const isRunsPage = computed(() => route.name === 'Runs')
 
 const localFilters = reactive({
@@ -238,6 +267,11 @@ onMounted(async () => {
   } catch {
     // Not logged in
   }
+  clockTimer = setInterval(() => { now.value = new Date() }, 5000)
+})
+
+onUnmounted(() => {
+  if (clockTimer) clearInterval(clockTimer)
 })
 </script>
 
@@ -248,5 +282,13 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   cursor: pointer;
+}
+
+.sync-status-centered {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
 }
 </style>

@@ -89,12 +89,29 @@ function upsertJob(job, runId) {
   });
 }
 
+// In-memory workflow cache to avoid re-fetching every cycle
+const workflowCache = new Map();
+const WORKFLOW_CACHE_CYCLES = 10;
+
 async function syncRepoRuns(owner, repo, accessToken) {
+  const repoFullName = `${owner}/${repo}`;
   try {
-    // Fetch workflows
-    const workflows = await githubApi.listWorkflows(owner, repo, accessToken);
-    for (const wf of workflows) {
-      upsertWorkflow(wf, owner, repo);
+    const db = getDb();
+    const cacheKey = repoFullName;
+    let workflows;
+    const cached = workflowCache.get(cacheKey);
+
+    if (cached && cached.cyclesSince < WORKFLOW_CACHE_CYCLES) {
+      workflows = cached.workflows;
+      cached.cyclesSince++;
+      console.log(`[sync] ${repoFullName}: using cached workflows (${workflows.length}), cycle ${cached.cyclesSince}/${WORKFLOW_CACHE_CYCLES}`);
+    } else {
+      workflows = await githubApi.listWorkflows(owner, repo, accessToken);
+      for (const wf of workflows) {
+        upsertWorkflow(wf, owner, repo);
+      }
+      workflowCache.set(cacheKey, { workflows, cyclesSince: 0 });
+      console.log(`[sync] ${repoFullName}: fetched ${workflows.length} workflow(s) from API`);
     }
 
     // Build a name lookup for workflows
@@ -117,22 +134,56 @@ async function syncRepoRuns(owner, repo, accessToken) {
       }
     }
 
-    // Fetch jobs for new/recent runs
-    for (const run of runs.slice(0, 10)) {
-      try {
-        const jobs = await githubApi.listRunJobs(owner, repo, run.id, accessToken);
-        for (const job of jobs) {
-          upsertJob(job, run.id);
+    // Fetch jobs only for runs that need them
+    const jobCountStmt = db.prepare(
+      'SELECT COUNT(*) as cnt FROM workflow_jobs WHERE run_id = ? AND conclusion IS NOT NULL'
+    );
+
+    let jobsFetched = 0;
+    let jobsSkipped = 0;
+
+    for (const run of runs) {
+      const isActive = ['queued', 'in_progress', 'waiting'].includes(run.status);
+
+      if (isActive) {
+        // Always fetch jobs for active runs
+        try {
+          const jobs = await githubApi.listRunJobs(owner, repo, run.id, accessToken);
+          for (const job of jobs) {
+            upsertJob(job, run.id);
+          }
+          jobsFetched += jobs.length;
+        } catch (err) {
+          console.error(`[sync] ${repoFullName}: failed to fetch jobs for active run ${run.id}: ${err.message}`);
         }
-      } catch (err) {
-        console.error(`Failed to fetch jobs for run ${run.id}: ${err.message}`);
+        continue;
+      }
+
+      // For completed runs, skip if we already have jobs with conclusions
+      if (run.status === 'completed') {
+        const existing = jobCountStmt.get(run.id);
+        if (existing.cnt > 0) {
+          jobsSkipped++;
+          continue;
+        }
+
+        try {
+          const jobs = await githubApi.listRunJobs(owner, repo, run.id, accessToken);
+          for (const job of jobs) {
+            upsertJob(job, run.id);
+          }
+          jobsFetched += jobs.length;
+        } catch (err) {
+          console.error(`[sync] ${repoFullName}: failed to fetch jobs for run ${run.id}: ${err.message}`);
+        }
       }
     }
 
+    console.log(`[sync] ${repoFullName}: ${runs.length} runs, ${activeRuns.length} active, jobs fetched=${jobsFetched} skipped=${jobsSkipped}`);
     return activeRuns;
   } catch (err) {
-    console.error(`Failed to sync ${owner}/${repo}: ${err.message}`);
-    return [];
+    console.error(`[sync] ${repoFullName}: FAILED — ${err.message}`);
+    return null;
   }
 }
 
@@ -171,4 +222,8 @@ async function syncActiveRun(owner, repo, runId, accessToken) {
   }
 }
 
-module.exports = { upsertWorkflow, upsertRun, upsertJob, syncRepoRuns, syncActiveRun };
+function _resetCache() {
+  workflowCache.clear();
+}
+
+module.exports = { upsertWorkflow, upsertRun, upsertJob, syncRepoRuns, syncActiveRun, _resetCache };

@@ -17,11 +17,13 @@
     "axios": "^1.7.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.0.0",
+    "better-sqlite3-session-store": "^0.1.0",
     "cookie-parser": "^1.4.7",
     "express": "^4.21.0",
     "express-session": "^1.18.0",
     "node-cron": "^3.0.3",
     "passport": "^0.7.0",
-    "passport-github2": "^0.1.12"
+    "passport-github2": "^0.1.12",
+    "smee-client": "^2.0.4"
   }
 }
